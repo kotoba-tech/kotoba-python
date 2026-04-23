@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kotoba-sdk-rest"
+dynamic = ["version"]
+description = "Python SDK for Kotoba Speech APIs (REST transcription jobs + WebSocket streaming ASR / TTS / S2ST)"
+requires-python = ">=3.10"
+authors = [{ name = "Kotoba Technologies" }]
+keywords = ["kotoba", "asr", "tts", "speech-to-text", "speech-to-speech", "streaming", "websocket"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+dependencies = [
+    "requests>=2.31",
+    "httpx>=0.27",
+    "pydantic>=2.0",
+    "typing-extensions>=4.10",
+    # WebSocket streaming (ASR live, TTS, S2ST)
+    "websockets>=15.0",
+    # PCM audio helpers for the WS clients' file batching convenience methods.
+    # soundfile covers FLAC / OGG / WAV; the stdlib ``wave`` fallback in
+    # kotoba/audio.py only handles plain WAV.
+    "numpy>=1.26",
+    "soundfile>=0.13.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.5",
+    "responses>=0.25",
+]
+
+[project.urls]
+Homepage = "https://kotoba.tech"
+
+[tool.hatch.version]
+path = "src/kotoba/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kotoba"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
