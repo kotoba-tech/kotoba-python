@@ -1,8 +1,7 @@
 """Unit tests for the REST SDK (``submit_job`` / ``get_job`` / ``transcribe``).
 
 Uses the ``responses`` library to stub the HTTP round-trip so tests don't
-depend on the real server being up. Integration coverage against the
-actual demo_api ASGI app lives in ``test_rest_with_demo_api.py``.
+depend on the real server being up. Run with: ``pytest tests/test_rest_sdk.py``.
 """
 
 from __future__ import annotations
@@ -195,6 +194,57 @@ def test_protocol_error_on_400(fake_wav):
     )
     with pytest.raises(ProtocolError):
         _client().asr.submit_job(fake_wav)
+
+
+@responses.activate
+def test_auth_error_unwraps_openai_envelope(fake_wav):
+    """OpenAI-style {"error": {"message": "..."}} payloads should surface the
+    inner message string, not the raw dict, in the exception."""
+
+    responses.add(
+        responses.POST,
+        JOBS_URL,
+        json={
+            "error": {
+                "code": "invalid_api_key",
+                "type": "invalid_request_error",
+                "message": "Not Authorized. Check your API key at https://dashboard.kotobatech.ai/",
+                "param": None,
+            }
+        },
+        status=401,
+    )
+    with pytest.raises(AuthError) as exc:
+        _client().asr.submit_job(fake_wav)
+    assert (
+        str(exc.value)
+        == "Not Authorized. Check your API key at https://dashboard.kotobatech.ai/"
+    )
+
+
+@responses.activate
+def test_protocol_error_preserves_fastapi_validation_detail(fake_wav):
+    """FastAPI 422 returns ``detail`` as a list of validation entries.
+    The exception message must surface the structured info (stringified),
+    not collapse to a generic ``HTTP 422 from ...`` placeholder."""
+
+    detail = [
+        {
+            "loc": ["body", "language"],
+            "msg": "field required",
+            "type": "value_error.missing",
+        }
+    ]
+    responses.add(
+        responses.POST,
+        JOBS_URL,
+        json={"detail": detail},
+        status=422,
+    )
+    with pytest.raises(ProtocolError) as exc:
+        _client().asr.submit_job(fake_wav)
+    assert "field required" in str(exc.value)
+    assert exc.value.payload == {"detail": detail}
 
 
 # ---------- URL / env handling -----------------------------------------

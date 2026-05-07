@@ -1,100 +1,174 @@
 # kotoba-sdk
 
-Python SDK for Kotoba Speech APIs:
+Python SDK for Kotoba speech APIs — REST batch transcription and streaming **ASR**, **TTS**, and **speech-to-speech translation** over WebSockets.
 
-- **REST** — async ASR transcription jobs (POST audio file, poll, get text)
-- **WebSocket** — live streaming ASR, TTS, and S2ST (speech-to-speech translation)
+> Phase-1 alpha. See [`docs/quickstart.md`](docs/quickstart.md).
 
 ## Install
 
 ```bash
-pip install .
-# or, from an editable checkout:
-pip install -e .
+pip install kotoba-sdk
 ```
 
-Python ≥ 3.10. Dependencies: `requests`, `httpx`, `pydantic`, `websockets`, `numpy`, `soundfile`.
+Or from a checkout:
 
-## Environment variables
+```bash
+git clone https://github.com/kotoba-tech/kotoba-python.git
+cd kotoba-python
+uv venv
+uv pip install -e .
+```
 
-The SDK reads configuration from these env vars only. There are no legacy
-aliases — set exactly these names.
+Python ≥ 3.10. Optional `mic` extra (`pip install 'kotoba-sdk[mic]'`) installs `sounddevice` for live-microphone examples.
+
+## Configure endpoints
+
+The SDK reads configuration from these env vars only — set the ones for the routes you actually need:
 
 | Variable | Purpose |
 |---|---|
 | `KOTOBA_API_KEY` | Bearer token sent as `Authorization: Bearer …` (REST + WS) |
-| `KOTOBA_ASR_REST_URL` | REST API base URL including version prefix, e.g. `https://xxx/v1` |
-| `KOTOBA_ASR_URL` | WebSocket URL for live ASR streaming, e.g. `wss://yyy/v1/realtime` |
-| `KOTOBA_TTS_JA_URL` | WebSocket URL for Japanese TTS, e.g. `wss://zzz/v2/tts/ws` |
+| `KOTOBA_ASR_REST_URL` | REST API base URL including version prefix, e.g. `https://.../v1` |
+| `KOTOBA_ASR_URL` | WebSocket URL for live ASR, e.g. `wss://.../asr` |
+| `KOTOBA_TTS_JA_URL` | WebSocket URL for Japanese TTS, e.g. `wss://.../tts` |
 | `KOTOBA_S2ST_EN_JA_URL` | WebSocket URL for English-to-Japanese speech translation |
+
+You can also register routes from code:
+
+```python
+import kotoba
+kotoba.register_endpoint("tts", None, "ko", "wss://.../tts")
+```
+
+URLs passed explicitly via `url=...` on a call take precedence over the registry.
 
 ## Quickstart
 
 ```python
-import os
 import kotoba
 
-client = kotoba.KotobaClient(
-    api_key=os.environ["KOTOBA_API_KEY"],
-    url=os.environ["KOTOBA_ASR_REST_URL"],
+client = kotoba.KotobaClient()  # reads KOTOBA_API_KEY + KOTOBA_*_URL from env
+
+# 1) Speech recognition (REST batch — default for files)
+result = client.asr.transcribe(
+    "examples/audio/ja/example.mp3", language="ja"
 )
-result = client.asr.transcribe("sample.wav", language="ja")
 print(result.text)
+
+# 2) Text-to-Speech (Japanese, default speaker)
+audio = client.tts.synthesize("こんにちは、世界。", language="ja")
+audio.to_wav("hello.wav")
+
+# 3) Speech-to-Speech translation (English -> Japanese)
+translated = client.s2st.translate(
+    "examples/audio/en/example.mp3", src="en", tgt="ja"
+)
+translated.to_wav("translated.wav")
+print(translated.transcript_source)
 ```
 
-If `KOTOBA_API_KEY` and `KOTOBA_ASR_REST_URL` are set in the environment you
-can drop both kwargs:
+`KotobaClient()` reads its credentials and URLs from env vars. Pass them explicitly if you'd rather not rely on the environment:
 
 ```python
-client = kotoba.KotobaClient()
-print(client.asr.transcribe("sample.wav").text)
+client = kotoba.KotobaClient(
+    api_key="sk_...",
+    url="https://.../v1",                  # REST base
+    asr_ws_url="wss://.../asr",
+    tts_ja_ws_url="wss://.../tts",
+    s2st_en_ja_ws_url="wss://.../sts",
+)
 ```
 
-### With timestamps
+## Streaming (the live surface)
+
+ASR, TTS, and S2ST are all streaming-first. Audio chunks and partial transcripts surface the moment the server emits them, so you can play / display incrementally instead of waiting for the full response.
+
+### Bidirectional streaming
+
+ASR and TTS both accept a generator on the input side and yield a generator on the output side — feed and drain run concurrently, so the first transcript delta / audio chunk surfaces while the generator is still producing input:
 
 ```python
-result = client.asr.transcribe("sample.wav", with_timestamps=True)
-print(result.text)
-for seg in result.segments:
-    print(f"{seg.start:6.2f} - {seg.end:6.2f}  {seg.text}")
+# ASR: pcm16 bytes in -> transcript deltas out
+for delta in client.asr.transcribe_stream(mic_chunks(), language="ja"):
+    print(delta, end="", flush=True)
+
+# TTS: text tokens in -> pcm audio chunks out
+for pcm in client.tts.synthesize_stream(llm_tokens(), language="ja"):
+    speaker.write(pcm)
 ```
 
-### Async
+### Async (recommended for production)
 
 ```python
-import asyncio, os, kotoba
+import asyncio, kotoba
 
 async def main():
-    async with kotoba.AsyncKotobaClient(
-        api_key=os.environ["KOTOBA_API_KEY"],
-        url=os.environ["KOTOBA_ASR_REST_URL"],
-    ) as client:
-        result = await client.asr.transcribe("sample.wav", language="ja")
-        print(result.text)
+    client = kotoba.AsyncKotobaClient()
+
+    async with client.tts.stream(language="ja") as session:
+        await session.start_response()
+        await session.append_text("こんにちは。")
+        await session.append_text("本日は")
+        await session.append_text("よろしくお願いします。")
+        await session.commit()
+
+        async for event in session:
+            if event.type == "audio_chunk":
+                await play(event.audio)
+            elif event.type == "done":
+                break
 
 asyncio.run(main())
 ```
 
-### Live streaming ASR (WebSocket)
+### Sync (notebooks, scripts)
 
 ```python
 import kotoba
 
-client = kotoba.KotobaClient()  # reads KOTOBA_API_KEY + KOTOBA_ASR_URL
-for delta in client.asr.transcribe_stream(file_chunk_iter("mic.pcm")):
-    print(delta, end="", flush=True)
+client = kotoba.KotobaClient()
+with client.s2st.stream(src="en", tgt="ja") as session:
+    for chunk in pcm16_chunks_from_mic():
+        session.send_audio(chunk)
+    session.commit()
+    for event in session:
+        if event.type == "partial_transcript":
+            print(event.text, end="", flush=True)
+        elif event.type == "audio_chunk":
+            speaker.write(event.audio)
+        elif event.type == "done":
+            break
 ```
 
-### TTS / S2ST
+The sync wrapper runs an `asyncio` loop on a background daemon thread, so the underlying transport is identical — only the call style differs.
 
-```python
-client = kotoba.KotobaClient()  # reads KOTOBA_TTS_JA_URL
-audio = client.tts.synthesize("こんにちは", language="ja", speaker_id="ja-man-1")
-audio.to_wav("out.wav")
+## What's in the box
 
-result = client.s2st.translate("input.wav", src="en", tgt="ja")  # reads KOTOBA_S2ST_EN_JA_URL
-result.to_wav("translated.wav")
-```
+| Module | What |
+|---|---|
+| `kotoba.KotobaClient` / `AsyncKotobaClient` | Top-level entry point |
+| `client.asr.transcribe(path, ...)` | **REST** batch transcription with optional `with_timestamps=True` |
+| `client.asr.stream(...)` / `transcribe_stream(iter)` | Streaming ASR (Japanese, English) over WebSocket |
+| `client.tts.stream(...)` / `synthesize(...)` / `synthesize_stream(...)` | Streaming TTS (Japanese) |
+| `client.s2st.stream(...)` / `translate(...)` | Streaming speech-to-speech translation |
+| `kotoba.register_endpoint(...)` | Add `(modality, src, tgt) -> URL` routes |
+| `kotoba.audio.*` | PCM16 / float32 WAV helpers |
+
+## Examples
+
+Each example under `examples/` is runnable with `uv run examples/<file>.py` and uses bundled audio under `examples/audio/` by default.
+
+| File | What it shows | Required env |
+|---|---|---|
+| `asr_rest_sync.py` | REST batch transcription with `with_timestamps=True`, sync | `KOTOBA_API_KEY`, `KOTOBA_ASR_REST_URL` |
+| `asr_rest_async.py` | Same, async with `AsyncKotobaClient` context manager | `KOTOBA_API_KEY`, `KOTOBA_ASR_REST_URL` |
+| `asr_stream_async.py` | Live ASR via `transcribe_stream(generator)` with first-token-latency measurement | `KOTOBA_API_KEY`, `KOTOBA_ASR_URL` |
+| `tts_synthesize_sync.py` | One-shot TTS with explicit `speaker_id` | `KOTOBA_API_KEY`, `KOTOBA_TTS_JA_URL` |
+| `tts_stream_async.py` | LLM-token-style generator → streaming audio chunks | `KOTOBA_API_KEY`, `KOTOBA_TTS_JA_URL` |
+| `s2st_stream_async.py` | File in → live transcript + translated WAV out | `KOTOBA_API_KEY`, `KOTOBA_S2ST_EN_JA_URL` |
+| `s2st_mic_async.py` | **Live microphone** in → translated WAV out (Ctrl-C to stop). Requires `pip install 'kotoba-sdk[mic]'` and PortAudio. | `KOTOBA_API_KEY`, `KOTOBA_S2ST_EN_JA_URL` |
+
+REST is shown in both sync + async because the context-manager pattern matters for resource cleanup. Streaming examples are async-by-default — wrap with `kotoba.KotobaClient()` for sync (the snippets above show the conversion).
 
 ## Public API
 
@@ -103,10 +177,13 @@ result.to_wav("translated.wav")
 ```python
 KotobaClient(
     *,
-    api_key: str | None = None,   # falls back to KOTOBA_API_KEY
-    url: str | None = None,       # falls back to KOTOBA_ASR_REST_URL (REST only)
-    timeout: float = 30.0,        # per-request HTTP timeout (s)
-    max_retries: int = 3,         # for 429/5xx and network errors
+    api_key: str | None = None,           # KOTOBA_API_KEY
+    url: str | None = None,               # KOTOBA_ASR_REST_URL  (REST)
+    asr_ws_url: str | None = None,        # KOTOBA_ASR_URL       (WS ASR)
+    tts_ja_ws_url: str | None = None,     # KOTOBA_TTS_JA_URL    (WS TTS)
+    s2st_en_ja_ws_url: str | None = None, # KOTOBA_S2ST_EN_JA_URL
+    timeout: float = 30.0,                # per-request HTTP timeout (s)
+    max_retries: int = 3,                 # for 429/5xx and network errors
 )
 ```
 
@@ -118,29 +195,24 @@ Exposes:
 
 The async variant supports `async with …` and exposes `await client.close()`.
 
-### `client.asr.transcribe(...)` — high-level REST helper
+### `client.asr.transcribe(...)` — REST batch helper
 
 ```python
 transcribe(
     audio_file_path: str | Path,
     *,
     language: str = "ja",
-    with_timestamps: bool = False, # ask server for per-segment timestamps
-    poll_interval: float = 1.0,    # initial GET polling interval (s)
-    poll_backoff: float = 1.5,     # multiplied each poll
+    with_timestamps: bool = False,  # ask server for per-segment timestamps
+    poll_interval: float = 1.0,     # initial GET polling interval (s)
+    poll_backoff: float = 1.5,      # multiplied each poll
     max_poll_interval: float = 10.0,
-    timeout: float = 1200.0,       # overall deadline for job completion
+    timeout: float = 1200.0,        # overall deadline for job completion
 ) -> TranscriptResult
 ```
 
-POSTs the file, polls `GET /transcription_jobs/{id}` with exponential backoff,
-returns the final transcript. Raises `TranscriptionError` on server-reported
-failure, `TimeoutError` if the deadline elapses.
+POSTs the file, polls `GET /transcription_jobs/{id}` with exponential backoff, returns the final transcript. Raises `TranscriptionError` on server-reported failure, `TimeoutError` if the deadline elapses.
 
-When `with_timestamps=True`, `TranscriptResult.segments` is populated with
-`[Segment(text, start, end), ...]` (one per word/phrase chunk, derived from
-the model's `<|pad|>` token grid and refined with silero-VAD on the server
-side). Default is text-only; the server skips tokenizer + VAD work entirely.
+When `with_timestamps=True`, `TranscriptResult.segments` is populated with `[Segment(text, start, end), …]`.
 
 ### Low-level REST helpers
 
@@ -149,15 +221,13 @@ client.asr.submit_job(path, language="ja") -> JobIDResponse  # POST
 client.asr.get_job(job_id)                -> JobStatus       # GET, 202→processing
 ```
 
-`JobStatus.state` is one of `JobState.processing | done | error`. For `done`,
-read `.transcription`; for `error`, read `.error_message`.
+`JobStatus.state` is one of `JobState.processing | done | error`. For `done`, read `.transcription`; for `error`, read `.error_message`.
 
 ### WebSocket entry points
 
 ```python
 client.asr.stream(language="ja", url=...)           -> ASRSession
 client.asr.transcribe_stream(audio_iter, ...)       -> Iterator[str]
-client.asr.transcribe_file_ws(path, ...)            -> TranscriptResult
 
 client.tts.stream(language="ja", speaker_id=..., url=...)  -> TTSSession
 client.tts.synthesize_stream(text_or_iter, ...)            -> Iterator[bytes]
@@ -167,14 +237,7 @@ client.s2st.stream(src="en", tgt="ja", url=...)  -> S2STSession
 client.s2st.translate(path, src="en", tgt="ja")  -> S2STResult
 ```
 
-URLs resolve from the per-route env vars (`KOTOBA_ASR_URL`,
-`KOTOBA_TTS_JA_URL`, `KOTOBA_S2ST_EN_JA_URL`) unless passed explicitly with
-`url=`. You can also register routes at runtime:
-
-```python
-from kotoba import register_endpoint
-register_endpoint("tts", None, "ko", "wss://.../tts")
-```
+URLs resolve from the per-route env vars (`KOTOBA_ASR_URL`, `KOTOBA_TTS_JA_URL`, `KOTOBA_S2ST_EN_JA_URL`) unless passed explicitly with `url=`.
 
 ### Exceptions
 
@@ -192,26 +255,12 @@ All inherit from `kotoba.KotobaError`:
 
 ### Retry behavior (REST)
 
-Both sync and async clients retry on network errors, 429, and 5xx with
-exponential backoff. `Retry-After` headers on 429 are honored (async client).
-4xx other than 429 raise immediately.
+Both sync and async clients retry on network errors, 429, and 5xx with exponential backoff. `Retry-After` headers on 429 are honored (async client). 4xx other than 429 raise immediately.
 
-## Layout
+## Development
 
+```bash
+uv venv
+uv pip install -e ".[dev]"
+uv run pytest
 ```
-src/kotoba/
-  __init__.py    public exports
-  client.py      KotobaClient / AsyncKotobaClient
-  asr.py         REST + WS ASR client
-  tts.py         WS TTS client
-  s2st.py        WS speech-to-speech translation client
-  _http.py       HttpSession / AsyncHttpSession (retry/backoff)
-  _ws_*.py       per-modality WebSocket protocol handlers
-  audio.py       PCM16 / PCM_F32 helpers
-  routing.py     per-route env-var registry
-  errors.py      typed exceptions
-  models.py      pydantic models (TranscriptResult, StreamEvent, …)
-```
-
-Self-contained — can be copied to a standalone repo and built with `uv build`
-or `pip install .`.

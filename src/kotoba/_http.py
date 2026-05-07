@@ -108,17 +108,48 @@ def _safe_json(response: "requests.Response | httpx.Response") -> dict:
 
 
 def _raise_for_status(status: int, payload: dict, url: str) -> None:
-    message = (
-        payload.get("detail")
-        or payload.get("message")
-        or payload.get("error")
-        or f"HTTP {status} from {url}"
-    )
+    message = _extract_message(payload) or f"HTTP {status} from {url}"
     if status in (401, 403):
         raise AuthError(message, status_code=status, payload=payload)
     if 400 <= status < 500:
         raise ProtocolError(message, status_code=status, payload=payload)
     raise APIError(message, status_code=status, payload=payload)
+
+
+def _extract_message(payload: dict) -> str | None:
+    """Pull the human-readable error string out of a server payload.
+
+    Handles the common shapes:
+
+    - FastAPI: ``{"detail": "..."}`` (or a list of validation entries on 422)
+    - Flat: ``{"message": "..."}``
+    - OpenAI-style envelope: ``{"error": {"message": "...", "code": "..."}}``
+    - String error: ``{"error": "..."}``
+
+    For structured (non-string) ``detail``/``error`` payloads — most often
+    FastAPI 422 with ``detail`` as a list of validation entries — falls back
+    to ``str(value)`` so the diagnostics still surface in the exception
+    message instead of a generic ``HTTP <status>`` placeholder.
+    """
+
+    detail = payload.get("detail")
+    if isinstance(detail, str) and detail:
+        return detail
+    flat = payload.get("message")
+    if isinstance(flat, str) and flat:
+        return flat
+    err = payload.get("error")
+    if isinstance(err, dict):
+        nested = err.get("message")
+        if isinstance(nested, str) and nested:
+            return nested
+    if isinstance(err, str) and err:
+        return err
+
+    for value in (detail, flat, err):
+        if value:
+            return str(value)
+    return None
 
 
 class AsyncHttpSession:

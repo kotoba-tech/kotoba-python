@@ -177,7 +177,7 @@ class ASRClient:
             api_key=self._api_key,
         )
 
-    def transcribe_file_ws(
+    def _transcribe_file_ws(
         self,
         path: str | Path,
         *,
@@ -186,7 +186,11 @@ class ASRClient:
         keywords: list[str] | None = None,
         url: str | None = None,
     ) -> TranscriptResult:
-        """WS equivalent of ``transcribe(path)``: chunk + send + collect."""
+        """Internal helper; not part of the documented public API.
+
+        Prefer ``transcribe(path)`` (REST) for batch or
+        ``transcribe_stream(iter)`` for live.
+        """
 
         pcm16 = _load_and_resample_pcm16(path, sample_rate)
         parts: list[str] = []
@@ -319,9 +323,11 @@ class AsyncASRClient:
         with_timestamps: bool = False,
         poll_interval: float = 1.0,
         poll_backoff: float = 1.5,
-        max_poll_interval: float = 5.0,
-        timeout: float = 600.0,
+        max_poll_interval: float = 10.0,
+        timeout: float = DEFAULT_TIMEOUT,
     ) -> TranscriptResult:
+        """REST POST + poll. Returns the final transcript."""
+
         job = await self.submit_job(
             audio_file_path,
             language=language,
@@ -369,7 +375,7 @@ class AsyncASRClient:
             api_key=self._api_key,
         )
 
-    async def transcribe_file_ws(
+    async def _transcribe_file_ws(
         self,
         path: str | Path,
         *,
@@ -378,6 +384,11 @@ class AsyncASRClient:
         keywords: list[str] | None = None,
         url: str | None = None,
     ) -> TranscriptResult:
+        """Internal helper; not part of the documented public API.
+
+        Prefer ``transcribe(path)`` (REST) for batch or
+        ``transcribe_stream(iter)`` for live.
+        """
         pcm16 = _load_and_resample_pcm16(path, sample_rate)
         parts: list[str] = []
         async with self.stream(

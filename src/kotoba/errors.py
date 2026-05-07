@@ -25,7 +25,18 @@ class AuthError(APIError):
 
 
 class ProtocolError(APIError):
-    """Server returned a 4xx indicating a malformed request."""
+    """Server returned a structured error frame, malformed request, or 4xx."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str | None = None,
+        status_code: int | None = None,
+        payload: dict | None = None,
+    ):
+        super().__init__(message, status_code=status_code, payload=payload)
+        self.code = code
 
 
 class TimeoutError(APIError):  # noqa: A001 — importable as kotoba.TimeoutError

@@ -3,15 +3,18 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "kotoba-sdk-rest"
+name = "kotoba-sdk"
 dynamic = ["version"]
 description = "Python SDK for Kotoba Speech APIs (REST transcription jobs + WebSocket streaming ASR / TTS / S2ST)"
+readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.10"
 authors = [{ name = "Kotoba Technologies" }]
 keywords = ["kotoba", "asr", "tts", "speech-to-text", "speech-to-speech", "streaming", "websocket"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -33,6 +36,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+mic = ["sounddevice>=0.4.6"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -42,6 +46,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://kotoba.tech"
+Repository = "https://github.com/kotoba-tech/kotoba-python"
 
 [tool.hatch.version]
 path = "src/kotoba/_version.py"
@@ -50,4 +55,5 @@ path = "src/kotoba/_version.py"
 packages = ["src/kotoba"]
 
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 testpaths = ["tests"]
