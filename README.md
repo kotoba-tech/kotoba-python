@@ -83,17 +83,21 @@ client = kotoba.KotobaClient(
 
 ASR, TTS, and S2ST are all streaming-first. Audio chunks and partial transcripts surface the moment the server emits them, so you can play / display incrementally instead of waiting for the full response.
 
-### Bidirectional streaming
+### Streaming output
 
-ASR and TTS both accept a generator on the input side and yield a generator on the output side — feed and drain run concurrently, so the first transcript delta / audio chunk surfaces while the generator is still producing input:
+ASR streams transcript deltas as audio arrives; TTS streams audio chunks
+as the server produces them from a single text prompt. ASR accepts a
+generator of PCM16 chunks on the input side (feed + drain run
+concurrently); TTS sends the full text in one frame and streams audio
+back:
 
 ```python
 # ASR: pcm16 bytes in -> transcript deltas out
 for delta in client.asr.transcribe_stream(mic_chunks(), language="ja"):
     print(delta, end="", flush=True)
 
-# TTS: text tokens in -> pcm audio chunks out
-for pcm in client.tts.synthesize_stream(llm_tokens(), language="ja"):
+# TTS: full text in -> pcm audio chunks streamed out
+for pcm in client.tts.synthesize_stream("こんにちは、世界。", language="ja"):
     speaker.write(pcm)
 ```
 
@@ -106,11 +110,7 @@ async def main():
     client = kotoba.AsyncKotobaClient()
 
     async with client.tts.stream(language="ja") as session:
-        await session.start_response()
-        await session.append_text("こんにちは。")
-        await session.append_text("本日は")
-        await session.append_text("よろしくお願いします。")
-        await session.commit()
+        await session.synthesize("こんにちは。本日はよろしくお願いします。")
 
         async for event in session:
             if event.type == "audio_chunk":
@@ -164,7 +164,7 @@ Each example under `examples/` is runnable with `uv run examples/<file>.py` and 
 | `asr_rest_async.py` | Same, async with `AsyncKotobaClient` context manager | `KOTOBA_API_KEY`, `KOTOBA_ASR_REST_URL` |
 | `asr_stream_async.py` | Live ASR via `transcribe_stream(generator)` with first-token-latency measurement | `KOTOBA_API_KEY`, `KOTOBA_ASR_URL` |
 | `tts_synthesize_sync.py` | One-shot TTS with explicit `speaker_id` | `KOTOBA_API_KEY`, `KOTOBA_TTS_JA_URL` |
-| `tts_stream_async.py` | LLM-token-style generator → streaming audio chunks | `KOTOBA_API_KEY`, `KOTOBA_TTS_JA_URL` |
+| `tts_stream_async.py` | One-shot text in → streamed audio chunks with first-audio-latency timing | `KOTOBA_API_KEY`, `KOTOBA_TTS_JA_URL` |
 | `s2st_stream_async.py` | File in → live transcript + translated WAV out | `KOTOBA_API_KEY`, `KOTOBA_S2ST_EN_JA_URL` |
 | `s2st_mic_async.py` | **Live microphone** in → translated WAV out (Ctrl-C to stop). Requires `pip install 'kotoba-sdk[mic]'` and PortAudio. | `KOTOBA_API_KEY`, `KOTOBA_S2ST_EN_JA_URL` |
 
@@ -230,7 +230,7 @@ client.asr.stream(language="ja", url=...)           -> ASRSession
 client.asr.transcribe_stream(audio_iter, ...)       -> Iterator[str]
 
 client.tts.stream(language="ja", speaker_id=..., url=...)  -> TTSSession
-client.tts.synthesize_stream(text_or_iter, ...)            -> Iterator[bytes]
+client.tts.synthesize_stream(text, ...)                    -> Iterator[bytes]
 client.tts.synthesize(text, ...)                           -> AudioResult
 
 client.s2st.stream(src="en", tgt="ja", url=...)  -> S2STSession

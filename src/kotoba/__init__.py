@@ -22,7 +22,6 @@ from kotoba.models import (
     Segment,
     SessionConfig,
     StreamEvent,
-    TextSource,
     TranscriptResult,
 )
 from kotoba.routing import endpoint_for, register_endpoint
@@ -51,7 +50,6 @@ __all__ = [
     "S2STResult",
     "SessionConfig",
     "StreamEvent",
-    "TextSource",
     # Errors
     "KotobaError",
     "APIError",

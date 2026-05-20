@@ -52,10 +52,7 @@ import kotoba
 
 client = kotoba.KotobaClient()
 with client.tts.stream(language="ja") as session:
-    session.start_response()
-    for token in ["こんにちは。", "本日は", "よろしくお願いします。"]:
-        session.append_text(token)
-    session.commit()
+    session.synthesize("こんにちは。本日はよろしくお願いします。")
 
     for event in session:
         if event.type == "audio_chunk":
@@ -65,7 +62,7 @@ with client.tts.stream(language="ja") as session:
             break
 ```
 
-Async version: replace `with` with `async with` and add `await` to each call. See `examples/tts_stream_async.py` for the LLM-token-style generator pattern.
+Async version: replace `with` with `async with` and add `await` to each call. See `examples/tts_stream_async.py` for a runnable end-to-end demo with first-audio-latency timing.
 
 ## 5. Speech recognition (ASR)
 

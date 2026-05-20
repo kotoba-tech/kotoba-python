@@ -3,15 +3,11 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, AsyncIterable, Iterable, Literal, Union
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 AudioFormat = Literal["pcm16", "pcm_f32"]
-
-# Accepted shapes for TTS text input: a single string, a sync iterator
-# (e.g. a blocking LLM SSE generator), or an async iterator.
-TextSource = Union[str, Iterable[str], AsyncIterable[str]]
 
 StreamEventType = Literal[
     "session_ready",

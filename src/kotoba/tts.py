@@ -3,25 +3,21 @@
 Three surfaces:
 
 - `stream(...)` returns a session the caller drives manually
-  (`start_response` / `append_text` / `commit` / iterate events). Use this
-  when you need direct access to the underlying protocol.
-- `synthesize_stream(text)` accepts `str | Iterable[str] | AsyncIterable[str]`
-  (e.g. an LLM token generator) and yields raw PCM audio chunks as they
-  arrive. Text-feed and audio-drain run concurrently so first-audio latency
-  is not blocked on the text source finishing.
+  (`session.synthesize(text)` then iterate events). Use this when you need
+  direct access to the underlying protocol (e.g., to issue ``cancel()``).
+- `synthesize_stream(text)` accepts a plain ``str`` and yields raw PCM audio
+  chunks as they arrive from the server. Audio streaming is server→client
+  only — text input is sent in one frame.
 - `synthesize(text)` is a batch convenience that collects
-  `synthesize_stream` into one `AudioResult` — the "5-line hello world"
-  shape. Also accepts a generator.
+  `synthesize_stream` into one `AudioResult`.
 """
 
 from __future__ import annotations
 
-import asyncio
-from contextlib import suppress
 from typing import Any, AsyncIterator, Iterator
 
 from kotoba._ws_tts import AsyncTTSSession, TTSSession
-from kotoba.models import AudioResult, TextSource
+from kotoba.models import AudioResult
 from kotoba.routing import endpoint_for
 
 
@@ -55,20 +51,14 @@ class TTSClient:
 
     def synthesize_stream(
         self,
-        text: TextSource,
+        text: str,
         *,
         language: str = "ja",
         speaker_id: str | None = None,
         spk_ref_audio_tokens: Any = None,
         url: str | None = None,
     ) -> Iterator[bytes]:
-        """Yield PCM audio chunks for ``text``.
-
-        ``text`` may be a string, a sync generator (LLM SSE style), or an
-        async generator. The feeder is scheduled on the session's
-        background event loop so audio chunks surface as soon as the
-        server emits them — not after the generator is exhausted.
-        """
+        """Yield PCM audio chunks for ``text`` as the server emits them."""
 
         session = self.stream(
             language=language,
@@ -77,30 +67,16 @@ class TTSClient:
             url=url,
         )
         with session:
-            async_session = session._tts
-            loop = session._loop
-            assert loop is not None
-            feeder = asyncio.run_coroutine_threadsafe(
-                async_session.feed(text), loop
-            )
-            try:
-                for event in session:
-                    if event.type == "audio_chunk" and event.audio:
-                        yield event.audio
-                    elif event.type == "done":
-                        break
-                feeder.result()
-            finally:
-                if not feeder.done():
-                    feeder.cancel()
-                    with suppress(Exception):
-                        asyncio.run_coroutine_threadsafe(
-                            async_session.cancel(), loop
-                        ).result(timeout=1.0)
+            session.synthesize(text)
+            for event in session:
+                if event.type == "audio_chunk" and event.audio:
+                    yield event.audio
+                elif event.type == "done":
+                    break
 
     def synthesize(
         self,
-        text: TextSource,
+        text: str,
         *,
         language: str = "ja",
         speaker_id: str | None = None,
@@ -111,24 +87,14 @@ class TTSClient:
         audio_format = "pcm_f32"
         session = self.stream(language=language, speaker_id=speaker_id, url=url)
         with session:
+            session.synthesize(text)
             sample_rate = session.sample_rate
             audio_format = session.audio_format  # type: ignore[assignment]
-            async_session = session._tts
-            loop = session._loop
-            assert loop is not None
-            feeder = asyncio.run_coroutine_threadsafe(
-                async_session.feed(text), loop
-            )
-            try:
-                for event in session:
-                    if event.type == "audio_chunk" and event.audio:
-                        chunks.append(event.audio)
-                    elif event.type == "done":
-                        break
-                feeder.result()
-            finally:
-                if not feeder.done():
-                    feeder.cancel()
+            for event in session:
+                if event.type == "audio_chunk" and event.audio:
+                    chunks.append(event.audio)
+                elif event.type == "done":
+                    break
         return AudioResult(
             data=b"".join(chunks),
             sample_rate=sample_rate,
@@ -161,19 +127,14 @@ class AsyncTTSClient:
 
     async def synthesize_stream(
         self,
-        text: TextSource,
+        text: str,
         *,
         language: str = "ja",
         speaker_id: str | None = None,
         spk_ref_audio_tokens: Any = None,
         url: str | None = None,
     ) -> AsyncIterator[bytes]:
-        """Yield PCM audio chunks for ``text``.
-
-        ``text`` may be a string, a sync generator, or an async generator.
-        The feeder runs as a concurrent task so the first ``audio.chunk``
-        surfaces as soon as the server emits it.
-        """
+        """Yield PCM audio chunks for ``text`` as the server emits them."""
 
         async with self.stream(
             language=language,
@@ -181,23 +142,16 @@ class AsyncTTSClient:
             spk_ref_audio_tokens=spk_ref_audio_tokens,
             url=url,
         ) as session:
-            feeder = asyncio.create_task(session.feed(text))
-            try:
-                async for event in session:
-                    if event.type == "audio_chunk" and event.audio:
-                        yield event.audio
-                    elif event.type == "done":
-                        break
-                await feeder
-            finally:
-                if not feeder.done():
-                    feeder.cancel()
-                    with suppress(asyncio.CancelledError, Exception):
-                        await feeder
+            await session.synthesize(text)
+            async for event in session:
+                if event.type == "audio_chunk" and event.audio:
+                    yield event.audio
+                elif event.type == "done":
+                    break
 
     async def synthesize(
         self,
-        text: TextSource,
+        text: str,
         *,
         language: str = "ja",
         speaker_id: str | None = None,
@@ -207,21 +161,14 @@ class AsyncTTSClient:
         sample_rate = 24000
         audio_format = "pcm_f32"
         async with self.stream(language=language, speaker_id=speaker_id, url=url) as session:
+            await session.synthesize(text)
             sample_rate = session.sample_rate
             audio_format = session.audio_format
-            feeder = asyncio.create_task(session.feed(text))
-            try:
-                async for event in session:
-                    if event.type == "audio_chunk" and event.audio:
-                        chunks.append(event.audio)
-                    elif event.type == "done":
-                        break
-                await feeder
-            finally:
-                if not feeder.done():
-                    feeder.cancel()
-                    with suppress(asyncio.CancelledError, Exception):
-                        await feeder
+            async for event in session:
+                if event.type == "audio_chunk" and event.audio:
+                    chunks.append(event.audio)
+                elif event.type == "done":
+                    break
         return AudioResult(
             data=b"".join(chunks),
             sample_rate=sample_rate,

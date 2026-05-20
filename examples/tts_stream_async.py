@@ -1,15 +1,14 @@
-"""Async streaming TTS fed from an LLM-style async generator.
+"""Async streaming TTS — one-shot text in, audio chunks streamed out.
 
-Shows the ``synthesize_stream(text)`` entry point, which accepts any
-``AsyncIterable[str]`` (or sync iterable, or plain str). The feeder and
-audio drain run concurrently, so the first audio chunk surfaces as soon
-as the server emits it — not after the generator is exhausted. Swap
-``fake_llm`` for a real Anthropic / OpenAI streaming call and the shape
-is identical.
+Uses the low-level ``client.tts.stream(...)`` session so the WebSocket
+connection and ``open`` → ``session.created`` handshake complete *before*
+the timer starts. The reported TTFA is then the true model-side
+time-to-first-audio (server inference + one round-trip) rather than a
+cold-start metric that includes TCP/TLS setup.
 
 Usage:
     export KOTOBA_API_KEY=...
-    export KOTOBA_TTS_JA_URL=wss://.../tts
+    export KOTOBA_TTS_JA_URL=wss://.../v2/tts/ws
     uv run examples/tts_stream_async.py
 """
 
@@ -17,46 +16,44 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import AsyncIterator
 
 import kotoba
 from kotoba.audio import save_pcm_f32_as_wav
 
 
-SAMPLE_TOKENS_JA = [
-    "こん", "にち", "は、", "本", "日", "は", "お", "集まり", "いた", "だき",
-    "誠に", "あり", "がとう", "ござい", "ます。", "これ", "から", "新しい",
-    "音声", "合成", "エン", "ジン", "の", "デモ", "を", "行い", "ます。",
-    "どう", "ぞ", "最後", "まで", "お", "楽しみ", "くだ", "さい。",
-]
-
-
-async def fake_llm(tokens: list[str], t0: float) -> AsyncIterator[str]:
-    for tok in tokens:
-        await asyncio.sleep(0.2)  # mimic LLM token pacing
-        print(f"[{(time.monotonic()-t0)*1000:7.0f} ms]    llm -> {tok!r}")
-        yield tok
+SAMPLE_TEXT_JA = (
+    "こんにちは、本日はお集まりいただき誠にありがとうございます。"
+    "これから新しい音声合成エンジンのデモを行います。"
+    "どうぞ最後までお楽しみください。"
+)
 
 
 async def main() -> None:
     client = kotoba.AsyncKotobaClient()
 
-    chunks: list[bytes] = []
-    t0 = time.monotonic()
-    first_audio_at: float | None = None
+    # Pre-warm: TCP / TLS / WebSocket upgrade + `open` -> `session.created`
+    # all happen inside `__aenter__`. The TTFA timer below starts only
+    # after the session is ready, so it isolates server-side latency.
+    t_connect = time.monotonic()
+    async with client.tts.stream(language="ja") as session:
+        connect_ms = (time.monotonic() - t_connect) * 1000
+        print(f"[connect+handshake: {connect_ms:.0f} ms]")
 
-    async for pcm in client.tts.synthesize_stream(
-        fake_llm(SAMPLE_TOKENS_JA, t0), language="ja"
-    ):
-        now = time.monotonic() - t0
-        if first_audio_at is None:
-            first_audio_at = now
-            print(
-                f"[{now*1000:7.0f} ms] first audio "
-                f"(latency = {first_audio_at*1000:.0f} ms from start)"
-            )
-        chunks.append(pcm)
-        print(f"[{now*1000:7.0f} ms] <- audio chunk: {len(pcm)} bytes")
+        chunks: list[bytes] = []
+        first_audio_at: float | None = None
+        t0 = time.monotonic()
+        await session.synthesize(SAMPLE_TEXT_JA)
+
+        async for event in session:
+            if event.type == "audio_chunk" and event.audio:
+                now = time.monotonic() - t0
+                if first_audio_at is None:
+                    first_audio_at = now
+                    print(f"[{now*1000:7.0f} ms] TTFA = {first_audio_at*1000:.0f} ms")
+                chunks.append(event.audio)
+                print(f"[{now*1000:7.0f} ms] <- audio chunk: {len(event.audio)} bytes")
+            elif event.type == "done":
+                break
 
     save_pcm_f32_as_wav("out_ja.wav", b"".join(chunks), sample_rate=24000)
     print(

@@ -1,50 +1,56 @@
 """TTS WebSocket session.
 
-Implements the protocol from the kotoba-realtime-subtitles
-`input_streaming_tts/ws.py` server (see plan for the full frame table).
+Implements the one-shot protocol from the kotoba-realtime-subtitles
+`v2/tts/ws.py` server.
 
 Lifecycle:
     open                       (C->S)
     session.created            (S->C, sets sample_rate / format / client_id)
-    response.create            (C->S)  ─┐ per turn
+    response.create            (C->S)  ─┐ per turn (text in one frame)
     response.created           (S->C)   │
-    input_text_buffer.append   (C->S)*  │  zero or more
-    input_text_buffer.commit   (C->S)   │
     audio.chunk (isFinal=...)  (S->C)*  │  emitted as audio_chunk events
     response.done              (S->C)  ─┘
+
+Cancel:
+    response.cancel            (C->S)
+    response.done(cancelled)   (S->C)
 """
 
 from __future__ import annotations
 
 import asyncio
 import base64
-from typing import Any, AsyncIterable, Iterable
+import logging
+from typing import Any
 
 from kotoba._ws_base import AsyncSession, SyncSession
 from kotoba.errors import APIError, ProtocolError
-from kotoba.models import StreamEvent, TextSource
+from kotoba.models import StreamEvent
 
-_FEED_STOP = object()
+logger = logging.getLogger(__name__)
 
 DEFAULT_SPEAKER_BY_LANGUAGE = {
-    "ja": "",
-    # TODO(open-question-2): add Korean default once user provides speaker IDs.
+    # Available Japanese speakers: ``ja-man-m02-azawa`` (male) and
+    # ``ja-woman-f04-me`` (female). Pass ``speaker_id=`` to override.
+    "ja": "ja-man-m02-azawa",
 }
 
 
 class AsyncTTSSession(AsyncSession):
-    """Async streaming TTS session.
+    """Async streaming TTS session (one-shot text in, audio chunks out).
 
     Usage:
         async with AsyncTTSSession(url, language="ja", api_key=...) as tts:
-            await tts.start_response()
-            await tts.append_text("こんにちは。")
-            await tts.commit()
+            await tts.synthesize("こんにちは。")
             async for event in tts:
                 if event.type == "audio_chunk":
                     play(event.audio)
                 elif event.type == "done":
                     break
+
+    Server-side `timeout` frames (non-fatal worker-result timeouts) are
+    logged at WARNING and otherwise ignored — the server escalates to a
+    hard `error` close after its own retry budget is exhausted.
     """
 
     def __init__(
@@ -87,66 +93,31 @@ class AsyncTTSSession(AsyncSession):
 
     # -- senders -----------------------------------------------------------
 
-    async def start_response(self) -> None:
-        """Begin a new TTS turn. Required before append_text / commit."""
+    async def synthesize(
+        self,
+        text: str,
+        *,
+        response_id: str | None = None,
+        max_length: int | None = None,
+    ) -> None:
+        """Send the full ``text`` as a single ``response.create`` frame.
 
-        await self._send_json({"type": "response.create"})
+        Does not wait for completion — caller drains audio via iteration.
+        """
 
-    async def append_text(self, text: str) -> None:
-        """Push a text fragment to the active turn."""
-
-        if not text:
-            return
-        await self._send_json({"type": "input_text_buffer.append", "text": text})
-
-    async def commit(self) -> None:
-        """Mark the end of the current turn's text input."""
-
-        await self._send_json({"type": "input_text_buffer.commit"})
+        if not isinstance(text, str) or not text:
+            raise ValueError("synthesize() requires a non-empty string")
+        frame: dict[str, Any] = {"type": "response.create", "text": text}
+        if response_id is not None:
+            frame["response_id"] = response_id
+        if max_length is not None:
+            frame["max_length"] = max_length
+        await self._send_json(frame)
 
     async def cancel(self) -> None:
         """Cancel the in-flight response."""
 
         await self._send_json({"type": "response.cancel"})
-
-    async def synthesize(self, text: str) -> None:
-        """One-shot helper: response.create -> append_text -> commit."""
-
-        await self.start_response()
-        await self.append_text(text)
-        await self.commit()
-
-    async def feed(self, text: TextSource) -> None:
-        """Drive a full turn from a text source.
-
-        Accepts a plain string, a sync iterable (e.g. an LLM SSE generator
-        that blocks between tokens), or an async iterable. Sends
-        `response.create`, streams `input_text_buffer.append` per chunk,
-        then `input_text_buffer.commit`. Blocking sync iterators are pulled
-        one token at a time on a worker thread so the receiver loop keeps
-        draining audio frames in parallel.
-        """
-
-        await self.start_response()
-        if isinstance(text, str):
-            await self.append_text(text)
-        elif isinstance(text, AsyncIterable):
-            async for chunk in text:
-                if chunk:
-                    await self.append_text(chunk)
-        elif isinstance(text, Iterable):
-            it = iter(text)
-            while True:
-                chunk = await asyncio.to_thread(next, it, _FEED_STOP)
-                if chunk is _FEED_STOP:
-                    break
-                if chunk:
-                    await self.append_text(chunk)
-        else:
-            raise TypeError(
-                f"feed() expected str / Iterable[str] / AsyncIterable[str], got {type(text).__name__}"
-            )
-        await self.commit()
 
     # -- receiver ----------------------------------------------------------
 
@@ -194,7 +165,10 @@ class AsyncTTSSession(AsyncSession):
                     code=str(err.get("code", "failed")),
                     payload=payload,
                 )
-            await self._emit(StreamEvent(type="done", metadata=payload))
+            # `completed` and `cancelled` both surface as `done`.
+            metadata = dict(payload)
+            metadata["status"] = status
+            await self._emit(StreamEvent(type="done", metadata=metadata))
             await self._emit_done()
             return
 
@@ -206,11 +180,11 @@ class AsyncTTSSession(AsyncSession):
             )
 
         if msg_type == "timeout":
-            raise ProtocolError(
-                f"TTS server timeout: {payload.get('message', 'timeout')}",
-                code="timeout",
-                payload=payload,
+            logger.warning(
+                "TTS server reported worker-result timeout: %s",
+                payload.get("message"),
             )
+            return
 
 
 class TTSSession(SyncSession):
@@ -252,36 +226,18 @@ class TTSSession(SyncSession):
         if self._loop is None:
             raise APIError("TTSSession is not started; use it as a context manager")
 
-    def start_response(self) -> None:
+    def synthesize(
+        self,
+        text: str,
+        *,
+        response_id: str | None = None,
+        max_length: int | None = None,
+    ) -> None:
         self._ensure()
-        self._run(self._tts.start_response())
-
-    def append_text(self, text: str) -> None:
-        self._ensure()
-        self._run(self._tts.append_text(text))
-
-    def commit(self) -> None:
-        self._ensure()
-        self._run(self._tts.commit())
+        self._run(
+            self._tts.synthesize(text, response_id=response_id, max_length=max_length)
+        )
 
     def cancel(self) -> None:
         self._ensure()
         self._run(self._tts.cancel())
-
-    def synthesize(self, text: str) -> None:
-        self._ensure()
-        self._run(self._tts.synthesize(text))
-
-    def feed(self, text: TextSource) -> None:
-        """Blocking mirror of ``AsyncTTSSession.feed``.
-
-        Note: callers that need audio chunks to surface *while* the
-        generator is still yielding (the common LLM case) should use the
-        higher-level ``TTSClient.synthesize_stream`` — it schedules the
-        feeder on the background loop so iteration and feed run in
-        parallel. ``feed()`` here blocks until the final ``commit`` frame
-        has been sent.
-        """
-
-        self._ensure()
-        self._run(self._tts.feed(text))

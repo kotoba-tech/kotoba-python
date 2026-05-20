@@ -16,7 +16,7 @@ client = kotoba.KotobaClient()
 result = client.tts.synthesize(
     "こんにちは、世界。今日はいい天気ですね。",
     language="ja",
-    speaker_id="ja-man-kei_2",
+    speaker_id="ja-man-m02-azawa",
 )
 result.to_wav("tts_hello.wav")
 print(

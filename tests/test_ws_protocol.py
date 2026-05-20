@@ -51,18 +51,20 @@ async def _fake_tts_server(websocket):
         msg_type = msg["type"]
 
         if msg_type == "response.create":
-            await websocket.send(json.dumps({"type": "response.created"}))
-        elif msg_type == "input_text_buffer.append":
-            # Fake: nothing to do until commit.
-            pass
-        elif msg_type == "input_text_buffer.commit":
-            # Emit two non-final chunks then a final chunk.
+            assert msg.get("text"), "server contract: text must be non-empty"
+            response_id = msg.get("response_id") or "fake-response-1"
+            await websocket.send(
+                json.dumps(
+                    {"type": "response.created", "response": {"id": response_id}}
+                )
+            )
             chunk = struct.pack("<4f", 0.1, 0.2, 0.3, 0.4)
             for _ in range(2):
                 await websocket.send(
                     json.dumps(
                         {
                             "type": "audio.chunk",
+                            "response_id": response_id,
                             "audio": base64.b64encode(chunk).decode("ascii"),
                             "isFinal": False,
                         }
@@ -72,6 +74,7 @@ async def _fake_tts_server(websocket):
                 json.dumps(
                     {
                         "type": "audio.chunk",
+                        "response_id": response_id,
                         "audio": base64.b64encode(chunk).decode("ascii"),
                         "isFinal": True,
                     }
@@ -79,7 +82,19 @@ async def _fake_tts_server(websocket):
             )
             await websocket.send(
                 json.dumps(
-                    {"type": "response.done", "response": {"status": "completed"}}
+                    {
+                        "type": "response.done",
+                        "response": {"id": response_id, "status": "completed"},
+                    }
+                )
+            )
+        elif msg_type == "response.cancel":
+            await websocket.send(
+                json.dumps(
+                    {
+                        "type": "response.done",
+                        "response": {"id": "fake-response-1", "status": "cancelled"},
+                    }
                 )
             )
 
@@ -223,82 +238,6 @@ async def test_tts_async_streaming(tts_server_url):
     assert chunks[0] == struct.pack("<4f", 0.1, 0.2, 0.3, 0.4)
 
 
-# A second fake TTS server that emits one audio chunk per
-# `input_text_buffer.append` frame — lets tests observe the feeder and
-# receiver running concurrently (first audio chunk arrives while later
-# appends are still in flight).
-
-
-async def _fake_tts_per_append_server(websocket):
-    open_msg = json.loads(await websocket.recv())
-    assert open_msg["type"] == "open"
-    await websocket.send(
-        json.dumps(
-            {
-                "type": "session.created",
-                "format": "pcm_f32",
-                "sample_rate": 24000,
-                "channels": 1,
-                "language": open_msg["language"],
-                "speaker_id": open_msg["speaker_id"],
-                "client_id": "fake-client-per-append",
-            }
-        )
-    )
-
-    append_count = 0
-    while True:
-        try:
-            raw = await websocket.recv()
-        except websockets.exceptions.ConnectionClosed:
-            return
-        msg = json.loads(raw)
-        msg_type = msg["type"]
-
-        if msg_type == "response.create":
-            append_count = 0
-            await websocket.send(json.dumps({"type": "response.created"}))
-        elif msg_type == "input_text_buffer.append":
-            append_count += 1
-            # Encode the append index into the audio payload so tests can
-            # assert which-chunk-for-which-token ordering.
-            chunk = struct.pack("<f", float(append_count))
-            await websocket.send(
-                json.dumps(
-                    {
-                        "type": "audio.chunk",
-                        "audio": base64.b64encode(chunk).decode("ascii"),
-                        "isFinal": False,
-                    }
-                )
-            )
-        elif msg_type == "input_text_buffer.commit":
-            final_chunk = struct.pack("<f", 0.0)
-            await websocket.send(
-                json.dumps(
-                    {
-                        "type": "audio.chunk",
-                        "audio": base64.b64encode(final_chunk).decode("ascii"),
-                        "isFinal": True,
-                    }
-                )
-            )
-            await websocket.send(
-                json.dumps(
-                    {"type": "response.done", "response": {"status": "completed"}}
-                )
-            )
-
-
-@pytest.fixture
-def tts_per_append_url() -> Iterator[str]:
-    url, stop = _serve_in_thread(_fake_tts_per_append_server)
-    try:
-        yield url
-    finally:
-        stop()
-
-
 def test_tts_sync_streaming(tts_server_url):
     chunks: list[bytes] = []
     with TTSSession(tts_server_url, language="ja", speaker_id="ja-man-1") as session:
@@ -337,89 +276,58 @@ async def test_s2st_async_streaming(s2st_server_url):
     assert audio_chunks and len(audio_chunks[0]) == 20
 
 
-# ---------- TTS generator-input tests --------------------------------------
+# ---------- TTS cancel test ------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_tts_synthesize_stream_async_generator(tts_per_append_url):
-    async def gen():
-        for tok in ["a", "b", "c", "d"]:
-            yield tok
+async def test_tts_cancel(tts_server_url):
+    """response.cancel surfaces as a `done` event with status='cancelled'."""
 
+    async with AsyncTTSSession(
+        tts_server_url, language="ja", speaker_id="ja-man-1"
+    ) as session:
+        await session.cancel()
+        statuses: list[str] = []
+        async for event in session:
+            if event.type == "done":
+                statuses.append(event.metadata.get("status", "completed"))
+                break
+        assert statuses == ["cancelled"]
+
+
+# ---------- TTS high-level facade ------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_tts_synthesize_stream_async(tts_server_url):
     client = AsyncTTSClient(api_key=None)
     chunks: list[bytes] = []
     async for pcm in client.synthesize_stream(
-        gen(), language="ja", speaker_id="ja-man-1", url=tts_per_append_url
+        "hello", language="ja", speaker_id="ja-man-1", url=tts_server_url
     ):
         chunks.append(pcm)
-
-    # 4 append chunks (one per token) + 1 final chunk from commit.
-    assert len(chunks) == 5
-    indices = [struct.unpack("<f", c)[0] for c in chunks]
-    assert indices == [1.0, 2.0, 3.0, 4.0, 0.0]
+    assert len(chunks) == 3
+    assert chunks[0] == struct.pack("<4f", 0.1, 0.2, 0.3, 0.4)
 
 
-def test_tts_synthesize_stream_sync_generator(tts_per_append_url):
-    def gen():
-        for tok in ["a", "b", "c", "d"]:
-            yield tok
-
+def test_tts_synthesize_stream_sync(tts_server_url):
     client = TTSClient(api_key=None)
     chunks: list[bytes] = []
     for pcm in client.synthesize_stream(
-        gen(), language="ja", speaker_id="ja-man-1", url=tts_per_append_url
+        "hello", language="ja", speaker_id="ja-man-1", url=tts_server_url
     ):
         chunks.append(pcm)
-
-    assert len(chunks) == 5
-    indices = [struct.unpack("<f", c)[0] for c in chunks]
-    assert indices == [1.0, 2.0, 3.0, 4.0, 0.0]
+    assert len(chunks) == 3
 
 
 @pytest.mark.asyncio
-async def test_tts_synthesize_stream_interleaved(tts_per_append_url):
-    """Feeder and drainer run concurrently — the first audio chunk must
-    surface before the generator has yielded its last token."""
-
-    first_audio = asyncio.Event()
-    tokens_yielded: list[str] = []
-
-    async def gen():
-        for i, tok in enumerate(["a", "b", "c", "d"]):
-            if i >= 1:
-                # Wait for the first audio chunk to surface before
-                # yielding the second token. If the implementation drained
-                # only after commit, this would deadlock (no audio until
-                # after gen() finishes).
-                await asyncio.wait_for(first_audio.wait(), timeout=2.0)
-            tokens_yielded.append(tok)
-            yield tok
-
-    client = AsyncTTSClient(api_key=None)
-    chunks: list[bytes] = []
-    async for pcm in client.synthesize_stream(
-        gen(), language="ja", speaker_id="ja-man-1", url=tts_per_append_url
-    ):
-        if not first_audio.is_set():
-            first_audio.set()
-        chunks.append(pcm)
-
-    assert len(chunks) == 5
-    assert tokens_yielded == ["a", "b", "c", "d"]
-
-
-@pytest.mark.asyncio
-async def test_tts_synthesize_batch_accepts_generator(tts_per_append_url):
-    async def gen():
-        for tok in ["x", "y", "z"]:
-            yield tok
-
+async def test_tts_synthesize_batch_async(tts_server_url):
     client = AsyncTTSClient(api_key=None)
     result = await client.synthesize(
-        gen(), language="ja", speaker_id="ja-man-1", url=tts_per_append_url
+        "hello", language="ja", speaker_id="ja-man-1", url=tts_server_url
     )
-    # 3 append chunks + 1 final chunk, each 4 bytes (float32).
-    assert len(result.data) == 4 * 4
+    # 3 chunks * 4 floats * 4 bytes.
+    assert len(result.data) == 3 * 4 * 4
     assert result.sample_rate == 24000
 
 
