@@ -47,6 +47,7 @@ class S2STClient:
         src: str,
         tgt: str,
         sample_rate: int = _SESSION_SAMPLE_RATE,
+        delay: int | None = None,
         url: str | None = None,
     ) -> S2STSession:
         return S2STSession(
@@ -54,6 +55,7 @@ class S2STClient:
             src_language=src,
             tgt_language=tgt,
             sample_rate=sample_rate,
+            delay=delay,
             api_key=self._api_key,
         )
 
@@ -63,13 +65,14 @@ class S2STClient:
         *,
         src: str,
         tgt: str,
+        delay: int | None = None,
         url: str | None = None,
     ) -> S2STResult:
         pcm16 = _load_and_resample(path)
         audio_chunks: list[bytes] = []
         source_text: list[str] = []
 
-        with self.stream(src=src, tgt=tgt, url=url) as session:
+        with self.stream(src=src, tgt=tgt, delay=delay, url=url) as session:
             for chunk in _chunk_iter(pcm16):
                 session.send_audio(chunk)
             session.commit()
@@ -102,6 +105,7 @@ class AsyncS2STClient:
         src: str,
         tgt: str,
         sample_rate: int = _SESSION_SAMPLE_RATE,
+        delay: int | None = None,
         url: str | None = None,
     ) -> AsyncS2STSession:
         return AsyncS2STSession(
@@ -109,6 +113,7 @@ class AsyncS2STClient:
             src_language=src,
             tgt_language=tgt,
             sample_rate=sample_rate,
+            delay=delay,
             api_key=self._api_key,
         )
 
@@ -118,13 +123,14 @@ class AsyncS2STClient:
         *,
         src: str,
         tgt: str,
+        delay: int | None = None,
         url: str | None = None,
     ) -> S2STResult:
         pcm16 = _load_and_resample(path)
         audio_chunks: list[bytes] = []
         source_text: list[str] = []
 
-        async with self.stream(src=src, tgt=tgt, url=url) as session:
+        async with self.stream(src=src, tgt=tgt, delay=delay, url=url) as session:
             for chunk in _chunk_iter(pcm16):
                 await session.send_audio(chunk)
             await session.commit()

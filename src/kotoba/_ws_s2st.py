@@ -35,12 +35,14 @@ class AsyncS2STSession(AsyncSession):
         src_language: str,
         tgt_language: str,
         sample_rate: int = 24000,
+        delay: int | None = None,
         api_key: str | None = None,
     ) -> None:
         super().__init__(url, api_key=api_key)
         self._src = src_language
         self._tgt = tgt_language
         self._sample_rate = sample_rate
+        self._delay = delay
         self._session_ready = asyncio.Event()
         self._event_counter = 0
 
@@ -61,6 +63,8 @@ class AsyncS2STSession(AsyncSession):
                 },
             },
         }
+        if self._delay is not None:
+            update["session"]["delay"] = self._delay
         await self._send_json(update)
         await self._session_ready.wait()
 
@@ -145,6 +149,7 @@ class S2STSession(SyncSession):
         src_language: str,
         tgt_language: str,
         sample_rate: int = 24000,
+        delay: int | None = None,
         api_key: str | None = None,
     ) -> None:
         super().__init__(
@@ -153,6 +158,7 @@ class S2STSession(SyncSession):
                 src_language=src_language,
                 tgt_language=tgt_language,
                 sample_rate=sample_rate,
+                delay=delay,
                 api_key=api_key,
             )
         )
