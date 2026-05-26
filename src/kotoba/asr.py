@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import AsyncIterator, Iterator
 
 from kotoba._http import AsyncHttpSession, HttpSession
+from kotoba._pacing import apace, pace
 from kotoba._ws_asr import AsyncASRSession, ASRSession, AudioSource
 from kotoba.errors import JobNotFoundError, TimeoutError, TranscriptionError
 from kotoba.models import JobIDResponse, JobState, JobStatus, TranscriptResult
@@ -30,6 +31,7 @@ from kotoba.models import JobIDResponse, JobState, JobStatus, TranscriptResult
 DEFAULT_TIMEOUT = 1200.0  # 20 min; REST poll deadline
 _WS_DEFAULT_SAMPLE_RATE = 24000
 _WS_DEFAULT_CHUNK_MS = 200
+_WS_DEFAULT_CHUNK_S = _WS_DEFAULT_CHUNK_MS / 1000.0
 
 
 def _guess_content_type(path: Path) -> str:
@@ -200,7 +202,9 @@ class ASRClient:
             keywords=keywords,
             url=url,
         ) as session:
-            for chunk in _chunk_iter(pcm16, sample_rate):
+            for chunk in pace(
+                _chunk_iter(pcm16, sample_rate), _WS_DEFAULT_CHUNK_S
+            ):
                 session.send_audio(chunk)
             session.commit()
             for event in session:
@@ -397,7 +401,9 @@ class AsyncASRClient:
             keywords=keywords,
             url=url,
         ) as session:
-            for chunk in _chunk_iter(pcm16, sample_rate):
+            async for chunk in apace(
+                _chunk_iter(pcm16, sample_rate), _WS_DEFAULT_CHUNK_S
+            ):
                 await session.send_audio(chunk)
             await session.commit()
             async for event in session:

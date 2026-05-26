@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from kotoba._pacing import apace, pace
 from kotoba._ws_s2st import AsyncS2STSession, S2STSession
 from kotoba.audio import load_mono_pcm16_wav, resample_mono_pcm16
 from kotoba.models import S2STResult
@@ -14,6 +15,7 @@ from kotoba.routing import endpoint_for
 
 _SESSION_SAMPLE_RATE = 24000
 _DEFAULT_CHUNK_MS = 40
+_DEFAULT_CHUNK_S = _DEFAULT_CHUNK_MS / 1000.0
 
 
 def _resolve_url(url: str | None, src: str, tgt: str) -> str:
@@ -73,7 +75,7 @@ class S2STClient:
         source_text: list[str] = []
 
         with self.stream(src=src, tgt=tgt, delay=delay, url=url) as session:
-            for chunk in _chunk_iter(pcm16):
+            for chunk in pace(_chunk_iter(pcm16), _DEFAULT_CHUNK_S):
                 session.send_audio(chunk)
             session.commit()
             for event in session:
@@ -131,7 +133,7 @@ class AsyncS2STClient:
         source_text: list[str] = []
 
         async with self.stream(src=src, tgt=tgt, delay=delay, url=url) as session:
-            for chunk in _chunk_iter(pcm16):
+            async for chunk in apace(_chunk_iter(pcm16), _DEFAULT_CHUNK_S):
                 await session.send_audio(chunk)
             await session.commit()
             async for event in session:
