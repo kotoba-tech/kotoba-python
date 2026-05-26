@@ -1,0 +1,5 @@
+# Changes to release machinery require explicit owner review.
+# CODEOWNERS auto-requests review; pair with branch protection
+# ("Require review from Code Owners") to make it enforcing.
+/.github/workflows/  @Liangtaiwan
+/.github/CODEOWNERS  @Liangtaiwan
