@@ -82,6 +82,9 @@ class ProviderConfig:
     http_probe: ProbePolicy | None = None  # None => no readiness probing
     retryable_markers: tuple[str, ...] = ()
     connect_overrides: dict[str, Any] | None = None
+    # One-shot synchronous transcription endpoint (POST, multipart). When
+    # set, ``asr.transcribe()`` uses it instead of the submit/poll job API.
+    batch_transcribe_path: str | None = None
 
     def auth_headers(self, api_key: str | None) -> dict[str, str]:
         if not api_key:
@@ -112,6 +115,8 @@ FAL = ProviderConfig(
     ),
     # Cold TCP/WS opens can exceed the websockets default of 10s.
     connect_overrides={"open_timeout": 30},
+    # The fal batch STT app serves a synchronous endpoint, not the job API.
+    batch_transcribe_path="/v1/speech-to-text",
 )
 
 _BY_NAME = {KOTOBA.name: KOTOBA, FAL.name: FAL}

@@ -249,6 +249,17 @@ class AsyncSession:
                 except json.JSONDecodeError:
                     continue
                 try:
+                    if payload.get("type") == "x-fal-error":
+                        # Platform-level error frame from the fal gateway
+                        # (e.g. a capacity rejection) — same treatment as a
+                        # server `error` frame, handled here so every
+                        # modality benefits.
+                        raise ProtocolError(
+                            f"Fal platform error: "
+                            f"{payload.get('message', payload)}",
+                            code=str(payload.get("code", "x-fal-error")),
+                            payload=payload,
+                        )
                     await self._handle_text_frame(payload)
                 except ProtocolError as exc:
                     self._error = exc

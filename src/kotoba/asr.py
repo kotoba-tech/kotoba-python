@@ -15,6 +15,7 @@ The default ``transcribe(path)`` uses REST; call ``stream(...)`` or
 from __future__ import annotations
 
 import asyncio
+import logging
 import mimetypes
 import time
 from contextlib import suppress
@@ -30,6 +31,8 @@ from kotoba.models import JobIDResponse, JobState, JobStatus, TranscriptResult
 
 
 DEFAULT_TIMEOUT = 1200.0  # 20 min; REST poll deadline
+
+logger = logging.getLogger(__name__)
 _WS_DEFAULT_SAMPLE_RATE = 24000
 _WS_DEFAULT_CHUNK_MS = 200
 _WS_DEFAULT_CHUNK_S = _WS_DEFAULT_CHUNK_MS / 1000.0
@@ -141,7 +144,24 @@ class ASRClient:
         max_poll_interval: float = 10.0,
         timeout: float = DEFAULT_TIMEOUT,
     ) -> TranscriptResult:
-        """REST POST + poll. Returns the final transcript."""
+        """REST transcription. Returns the final transcript.
+
+        On the kotoba provider this is submit + poll against the job API.
+        On providers with a one-shot batch endpoint (fal), the file is sent
+        in a single synchronous POST and ``timeout`` bounds that request;
+        the polling parameters are unused.
+        """
+
+        self._require_http()
+        one_shot = self._http.provider.batch_transcribe_path
+        if one_shot is not None:
+            return self._transcribe_one_shot(
+                Path(audio_file_path),
+                endpoint=one_shot,
+                language=language,
+                with_timestamps=with_timestamps,
+                timeout=timeout,
+            )
 
         job = self.submit_job(
             audio_file_path,
@@ -171,6 +191,36 @@ class ASRClient:
                 )
             time.sleep(interval)
             interval = min(interval * poll_backoff, max_poll_interval)
+
+    def _transcribe_one_shot(
+        self,
+        path: Path,
+        *,
+        endpoint: str,
+        language: str,
+        with_timestamps: bool,
+        timeout: float,
+    ) -> TranscriptResult:
+        if with_timestamps:
+            logger.warning(
+                "with_timestamps is not supported by the one-shot %s endpoint; "
+                "ignoring",
+                endpoint,
+            )
+        self._http.ensure_ready()
+        # The gateway consumes Authorization; xi-api-key passes through and
+        # satisfies the app's own token requirement.
+        headers = {"xi-api-key": self._api_key} if self._api_key else {}
+        with path.open("rb") as f:
+            response = self._http.post(
+                endpoint,
+                files={"file": (path.name, f, _guess_content_type(path))},
+                data={"language": language, "file_format": "other"},
+                headers=headers,
+                timeout=timeout,
+            )
+        payload = response.json()
+        return TranscriptResult(text=str(payload.get("text") or ""))
 
     # ---------- WebSocket -------------------------------------------------
 
@@ -352,7 +402,18 @@ class AsyncASRClient:
         max_poll_interval: float = 10.0,
         timeout: float = DEFAULT_TIMEOUT,
     ) -> TranscriptResult:
-        """REST POST + poll. Returns the final transcript."""
+        """Async mirror of :meth:`ASRClient.transcribe` (same dispatch)."""
+
+        self._require_http()
+        one_shot = self._http.provider.batch_transcribe_path
+        if one_shot is not None:
+            return await self._transcribe_one_shot(
+                Path(audio_file_path),
+                endpoint=one_shot,
+                language=language,
+                with_timestamps=with_timestamps,
+                timeout=timeout,
+            )
 
         job = await self.submit_job(
             audio_file_path,
@@ -382,6 +443,34 @@ class AsyncASRClient:
                 )
             await asyncio.sleep(interval)
             interval = min(interval * poll_backoff, max_poll_interval)
+
+    async def _transcribe_one_shot(
+        self,
+        path: Path,
+        *,
+        endpoint: str,
+        language: str,
+        with_timestamps: bool,
+        timeout: float,
+    ) -> TranscriptResult:
+        if with_timestamps:
+            logger.warning(
+                "with_timestamps is not supported by the one-shot %s endpoint; "
+                "ignoring",
+                endpoint,
+            )
+        await self._http.ensure_ready()
+        headers = {"xi-api-key": self._api_key} if self._api_key else {}
+        data_bytes = await asyncio.to_thread(path.read_bytes)
+        response = await self._http.post(
+            endpoint,
+            files={"file": (path.name, data_bytes, _guess_content_type(path))},
+            data={"language": language, "file_format": "other"},
+            headers=headers,
+            timeout=timeout,
+        )
+        payload = response.json()
+        return TranscriptResult(text=str(payload.get("text") or ""))
 
     # ---------- WebSocket -------------------------------------------------
 

@@ -67,6 +67,10 @@ class HttpSession:
         session.headers.update(self._auth_headers)
         self._session = session
 
+    @property
+    def provider(self) -> ProviderConfig:
+        return self._provider
+
     def post(self, path: str, **kwargs: Any) -> requests.Response:
         return self._request("POST", path, **kwargs)
 
@@ -236,6 +240,10 @@ class AsyncHttpSession:
             timeout=timeout,
             headers=self._provider.auth_headers(api_key),
         )
+
+    @property
+    def provider(self) -> ProviderConfig:
+        return self._provider
 
     async def post(self, path: str, **kwargs: Any) -> httpx.Response:
         return await self._request("POST", path, **kwargs)

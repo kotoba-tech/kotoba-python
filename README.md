@@ -279,6 +279,7 @@ What changes in fal mode — call sites stay identical:
 - **Auth**: requests carry `Authorization: Key <api_key>` (REST + WS).
 - **WS session-init retry**: capacity rejections ("No available batch slot" and similar) are retried with full-jitter exponential backoff (1 s base, 20 s cap) under a 360 s wall-clock deadline, so a session opened against a cold app blocks until a worker boots instead of failing. Auth errors are never retried, and a mid-stream failure is never silently reconnected.
 - **REST readiness probing**: before a REST submit, the SDK probes the app's readiness endpoint with short sequential probes (30 s each, 2 s apart, 600 s deadline) and sends the real request only once the app answers — a cold request can't be parked and orphaned by the gateway. `client.warmup()` runs the same probe proactively.
+- **One-shot batch transcription**: the fal batch STT app serves a synchronous `POST /v1/speech-to-text` instead of the job API, so `asr.transcribe()` transparently uses it (single request, `timeout` bounds it; polling params and `with_timestamps` are unused). Point `url=` at the app root, e.g. `https://fal.run/<team>/<app>`.
 - `WorkerStartupError` (a `TimeoutError` subclass) is raised when a deadline is exhausted.
 
 Policies are tunable by passing a customized `ProviderConfig`:

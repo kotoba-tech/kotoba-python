@@ -359,6 +359,72 @@ def test_fal_warmup_probes_once_across_submits(fake_wav):
 
 
 @responses.activate
+def test_fal_transcribe_uses_one_shot_endpoint(fake_wav):
+    """On fal, transcribe() posts /v1/speech-to-text once (no job polling)
+    and forwards the app-level xi-api-key alongside the gateway Key auth."""
+
+    responses.add(responses.GET, PROBE_URL, status=200)
+    responses.add(
+        responses.POST,
+        f"{BASE_URL}/v1/speech-to-text",
+        json={"text": "こんにちは", "audio_duration_secs": 1.2},
+        status=200,
+    )
+    result = _fal_client().asr.transcribe(fake_wav, language="ja")
+    assert result.text == "こんにちは"
+    methods = [call.request.method for call in responses.calls]
+    assert methods == ["GET", "POST"]
+    post = responses.calls[1].request
+    assert post.headers["Authorization"] == "Key fal-secret"
+    assert post.headers["xi-api-key"] == "fal-secret"
+    assert b'name="language"' in post.body and b"ja" in post.body
+    assert b'name="file"' in post.body
+
+
+@responses.activate
+def test_kotoba_transcribe_still_uses_job_api(fake_wav):
+    """The one-shot dispatch must not affect the kotoba provider."""
+
+    responses.add(responses.POST, JOBS_URL, json={"job_id": "id-9"}, status=202)
+    responses.add(
+        responses.GET,
+        f"{JOBS_URL}/id-9",
+        json={"state": "done", "transcription": "ok"},
+        status=200,
+    )
+    result = _client().asr.transcribe(fake_wav, poll_interval=0.01, timeout=5.0)
+    assert result.text == "ok"
+    assert result.job_id == "id-9"
+
+
+async def test_fal_async_transcribe_one_shot(fake_wav):
+    def app(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/model_and_cuda_availability"):
+            return httpx.Response(200)
+        assert request.url.path.endswith("/v1/speech-to-text")
+        assert request.headers["xi-api-key"] == "fal-secret"
+        return httpx.Response(200, json={"text": "async ok"})
+
+    session = AsyncHttpSession(
+        base_url=BASE_URL,
+        api_key="fal-secret",
+        timeout=5.0,
+        max_retries=0,
+        provider=_FAST_FAL,
+    )
+    await session._client.aclose()
+    session._client = httpx.AsyncClient(
+        base_url=BASE_URL,
+        transport=httpx.MockTransport(app),
+        headers=_FAST_FAL.auth_headers("fal-secret"),
+    )
+    client = kotoba.AsyncASRClient(session, api_key="fal-secret")
+    result = await client.transcribe(fake_wav, language="ja")
+    assert result.text == "async ok"
+    await session.aclose()
+
+
+@responses.activate
 def test_kotoba_provider_never_probes(fake_wav):
     responses.add(responses.POST, JOBS_URL, json={"job_id": "k-1"}, status=202)
     job = _client().asr.submit_job(fake_wav)
