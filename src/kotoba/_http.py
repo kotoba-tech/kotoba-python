@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import random
 import time
 from typing import Any
@@ -22,6 +23,8 @@ from kotoba.errors import (
 )
 
 _RETRY_STATUS = (429, 500, 502, 503, 504)
+
+logger = logging.getLogger(__name__)
 
 
 class HttpSession:
@@ -85,6 +88,7 @@ class HttpSession:
         url = f"{self.base_url}{policy.probe_path}"
         started = time.monotonic()
         attempt = 0
+        last = "no probe completed"
         while True:
             attempt += 1
             try:
@@ -93,8 +97,8 @@ class HttpSession:
                     headers=self._auth_headers,
                     timeout=policy.probe_timeout_s,
                 )
-            except requests.RequestException:
-                pass
+            except requests.RequestException as exc:
+                last = f"{type(exc).__name__}: {exc}"
             else:
                 if response.status_code == 200:
                     self._warmed = True
@@ -103,10 +107,12 @@ class HttpSession:
                     _raise_for_status(
                         response.status_code, _safe_json(response), url
                     )
+                last = f"HTTP {response.status_code}"
+            logger.info("Readiness probe %d: %s; app not ready", attempt, last)
             if time.monotonic() - started > policy.deadline_s:
                 raise WorkerStartupError(
                     f"App at {url} not ready after {policy.deadline_s:.0f}s "
-                    f"({attempt} probes)"
+                    f"({attempt} probes; last: {last})"
                 )
             time.sleep(policy.probe_interval_s)
 
@@ -244,6 +250,7 @@ class AsyncHttpSession:
             return
         started = time.monotonic()
         attempt = 0
+        last = "no probe completed"
         while True:
             attempt += 1
             try:
@@ -252,8 +259,8 @@ class AsyncHttpSession:
                 response = await self._client.get(
                     policy.probe_path, timeout=policy.probe_timeout_s
                 )
-            except httpx.HTTPError:
-                pass
+            except httpx.HTTPError as exc:
+                last = f"{type(exc).__name__}: {exc}"
             else:
                 if response.status_code == 200:
                     self._warmed = True
@@ -264,10 +271,12 @@ class AsyncHttpSession:
                         _safe_json(response),
                         str(response.url),
                     )
+                last = f"HTTP {response.status_code}"
+            logger.info("Readiness probe %d: %s; app not ready", attempt, last)
             if time.monotonic() - started > policy.deadline_s:
                 raise WorkerStartupError(
                     f"App at {self.base_url}{policy.probe_path} not ready after "
-                    f"{policy.deadline_s:.0f}s ({attempt} probes)"
+                    f"{policy.deadline_s:.0f}s ({attempt} probes; last: {last})"
                 )
             await asyncio.sleep(policy.probe_interval_s)
 

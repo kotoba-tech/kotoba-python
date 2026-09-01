@@ -26,6 +26,7 @@ the Fal benchmark campaign (kotoba-realtime-subtitles bench_core):
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import random
 import time
@@ -42,6 +43,8 @@ from kotoba.errors import (
 )
 
 _PROVIDER_ENV_VAR = "KOTOBA_PROVIDER"
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -205,6 +208,14 @@ async def retry_session(
             if clock() - started + delay > policy.deadline_s:
                 raise WorkerStartupError(
                     f"Worker did not become ready within {policy.deadline_s:.0f}s "
-                    f"({attempt} attempts)"
+                    f"({attempt} attempts; last error: "
+                    f"{type(exc).__name__}: {exc})"
                 ) from exc
+            logger.info(
+                "Session init attempt %d failed (%s: %s); retrying in %.1fs",
+                attempt,
+                type(exc).__name__,
+                exc,
+                delay,
+            )
             await sleep(delay)
