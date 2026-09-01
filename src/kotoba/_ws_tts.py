@@ -18,11 +18,11 @@ Cancel:
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import logging
 from typing import Any
 
+from kotoba._providers import ProviderConfig
 from kotoba._ws_base import AsyncSession, SyncSession
 from kotoba.errors import APIError, ProtocolError
 from kotoba.models import StreamEvent
@@ -61,8 +61,9 @@ class AsyncTTSSession(AsyncSession):
         speaker_id: str | None = None,
         spk_ref_audio_tokens: Any = None,
         api_key: str | None = None,
+        provider: str | ProviderConfig | None = None,
     ) -> None:
-        super().__init__(url, api_key=api_key)
+        super().__init__(url, api_key=api_key, provider=provider)
         self._language = language
         self._speaker_id = speaker_id or DEFAULT_SPEAKER_BY_LANGUAGE.get(language)
         if self._speaker_id is None:
@@ -71,7 +72,6 @@ class AsyncTTSSession(AsyncSession):
                 f"pass speaker_id= explicitly."
             )
         self._spk_ref = spk_ref_audio_tokens
-        self._session_ready = asyncio.Event()
 
         # Populated from session.created.
         self.sample_rate: int = 24000
@@ -198,6 +198,7 @@ class TTSSession(SyncSession):
         speaker_id: str | None = None,
         spk_ref_audio_tokens: Any = None,
         api_key: str | None = None,
+        provider: str | ProviderConfig | None = None,
     ) -> None:
         super().__init__(
             AsyncTTSSession(
@@ -206,6 +207,7 @@ class TTSSession(SyncSession):
                 speaker_id=speaker_id,
                 spk_ref_audio_tokens=spk_ref_audio_tokens,
                 api_key=api_key,
+                provider=provider,
             )
         )
 

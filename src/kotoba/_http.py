@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+import time
 from typing import Any
 
 import httpx
@@ -11,11 +12,13 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from kotoba._providers import ProviderConfig, resolve_provider
 from kotoba.errors import (
     APIError,
     AuthError,
     ProtocolError,
     TimeoutError,
+    WorkerStartupError,
 )
 
 _RETRY_STATUS = (429, 500, 502, 503, 504)
@@ -37,9 +40,13 @@ class HttpSession:
         timeout: float,
         max_retries: int,
         backoff_factor: float = 0.5,
+        provider: str | ProviderConfig | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self._provider = resolve_provider(provider, base_url)
+        self._auth_headers = self._provider.auth_headers(api_key)
+        self._warmed = False
 
         session = requests.Session()
         retry = Retry(
@@ -54,8 +61,7 @@ class HttpSession:
         adapter = HTTPAdapter(max_retries=retry)
         session.mount("http://", adapter)
         session.mount("https://", adapter)
-        if api_key:
-            session.headers["Authorization"] = f"Bearer {api_key}"
+        session.headers.update(self._auth_headers)
         self._session = session
 
     def post(self, path: str, **kwargs: Any) -> requests.Response:
@@ -63,6 +69,46 @@ class HttpSession:
 
     def get(self, path: str, **kwargs: Any) -> requests.Response:
         return self._request("GET", path, **kwargs)
+
+    def ensure_ready(self) -> None:
+        """Probe the readiness endpoint until it answers 200 (cold start).
+
+        No-op unless the provider has a probe policy (fal). Each probe is a
+        short-lived plain request outside the retrying session, so an
+        orphaned parked request costs one probe timeout and the next probe
+        re-triggers a boot. 401/403 raise immediately; the overall wait is
+        bounded by the policy deadline (``WorkerStartupError`` past it).
+        """
+        policy = self._provider.http_probe
+        if policy is None or self._warmed:
+            return
+        url = f"{self.base_url}{policy.probe_path}"
+        started = time.monotonic()
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                response = requests.get(
+                    url,
+                    headers=self._auth_headers,
+                    timeout=policy.probe_timeout_s,
+                )
+            except requests.RequestException:
+                pass
+            else:
+                if response.status_code == 200:
+                    self._warmed = True
+                    return
+                if response.status_code in (401, 403):
+                    _raise_for_status(
+                        response.status_code, _safe_json(response), url
+                    )
+            if time.monotonic() - started > policy.deadline_s:
+                raise WorkerStartupError(
+                    f"App at {url} not ready after {policy.deadline_s:.0f}s "
+                    f"({attempt} probes)"
+                )
+            time.sleep(policy.probe_interval_s)
 
     def _request(
         self,
@@ -169,18 +215,20 @@ class AsyncHttpSession:
         max_retries: int,
         backoff_factor: float = 0.5,
         max_backoff: float = 10.0,
+        provider: str | ProviderConfig | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self._max_retries = max_retries
         self._backoff_factor = backoff_factor
         self._max_backoff = max_backoff
+        self._provider = resolve_provider(provider, base_url)
+        self._warmed = False
 
-        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self._client = httpx.AsyncClient(
             base_url=self.base_url,
             timeout=timeout,
-            headers=headers,
+            headers=self._provider.auth_headers(api_key),
         )
 
     async def post(self, path: str, **kwargs: Any) -> httpx.Response:
@@ -188,6 +236,40 @@ class AsyncHttpSession:
 
     async def get(self, path: str, **kwargs: Any) -> httpx.Response:
         return await self._request("GET", path, **kwargs)
+
+    async def ensure_ready(self) -> None:
+        """Async mirror of :meth:`HttpSession.ensure_ready`."""
+        policy = self._provider.http_probe
+        if policy is None or self._warmed:
+            return
+        started = time.monotonic()
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                # Raw client call: probes must bypass the retrying _request
+                # wrapper so each one stays a short, bounded attempt.
+                response = await self._client.get(
+                    policy.probe_path, timeout=policy.probe_timeout_s
+                )
+            except httpx.HTTPError:
+                pass
+            else:
+                if response.status_code == 200:
+                    self._warmed = True
+                    return
+                if response.status_code in (401, 403):
+                    _raise_for_status(
+                        response.status_code,
+                        _safe_json(response),
+                        str(response.url),
+                    )
+            if time.monotonic() - started > policy.deadline_s:
+                raise WorkerStartupError(
+                    f"App at {self.base_url}{policy.probe_path} not ready after "
+                    f"{policy.deadline_s:.0f}s ({attempt} probes)"
+                )
+            await asyncio.sleep(policy.probe_interval_s)
 
     async def aclose(self) -> None:
         await self._client.aclose()

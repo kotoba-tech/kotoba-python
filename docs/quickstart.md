@@ -16,6 +16,24 @@ export KOTOBA_TTS_JA_URL=wss://.../tts               # streaming TTS (ja)
 
 Only the routes you actually call need to be set. You can also register routes from code with `kotoba.register_endpoint(modality, src, tgt, url)`, or pass `url=...` directly to any `stream(...)` / `transcribe(...)` / `synthesize(...)` call.
 
+### Using the fal.ai deployments
+
+For the services deployed on fal.ai, export `FAL_KEY` and point the URLs at your fal app — the SDK auto-detects `fal.run` hosts and switches to `Authorization: Key …` auth with cold-start handling (session-init retry + readiness probing) enabled:
+
+```bash
+export FAL_KEY=...
+export KOTOBA_TTS_JA_URL=wss://fal.run/<team>/<app>/v2/tts/ws
+```
+
+```python
+import kotoba
+
+client = kotoba.KotobaClient(provider="fal")   # explicit; auto-detected from fal.run URLs too
+result = client.tts.synthesize("こんにちは、世界。", language="ja")
+```
+
+The first call against a cold app blocks (bounded by the retry deadline) while the worker boots; everything after that behaves exactly like the direct endpoints.
+
 ## 2. Install
 
 ```bash

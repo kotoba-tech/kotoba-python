@@ -1,5 +1,6 @@
 """Kotoba Speech SDK — REST transcription jobs + WebSocket streaming (ASR, TTS, S2ST)."""
 
+from kotoba._providers import FAL, KOTOBA, ProbePolicy, ProviderConfig, RetryPolicy
 from kotoba._version import __version__
 from kotoba.asr import ASRClient, AsyncASRClient
 from kotoba.client import AsyncKotobaClient, KotobaClient
@@ -12,6 +13,7 @@ from kotoba.errors import (
     TimeoutError,
     TranscriptionError,
     UnsupportedRouteError,
+    WorkerStartupError,
 )
 from kotoba.models import (
     AudioResult,
@@ -50,12 +52,19 @@ __all__ = [
     "S2STResult",
     "SessionConfig",
     "StreamEvent",
+    # Providers
+    "ProviderConfig",
+    "RetryPolicy",
+    "ProbePolicy",
+    "KOTOBA",
+    "FAL",
     # Errors
     "KotobaError",
     "APIError",
     "AuthError",
     "ProtocolError",
     "TimeoutError",
+    "WorkerStartupError",
     "JobNotFoundError",
     "TranscriptionError",
     "UnsupportedRouteError",

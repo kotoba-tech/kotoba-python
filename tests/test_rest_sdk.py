@@ -6,17 +6,22 @@ depend on the real server being up. Run with: ``pytest tests/test_rest_sdk.py``.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from io import BytesIO
 
+import httpx
 import pytest
 import responses
 
 import kotoba
+from kotoba._http import AsyncHttpSession
+from kotoba._providers import FAL, ProbePolicy
 from kotoba.errors import (
     AuthError,
     JobNotFoundError,
     ProtocolError,
     TranscriptionError,
+    WorkerStartupError,
 )
 
 BASE_URL = "http://fake.example/v1"
@@ -265,3 +270,150 @@ def test_client_url_from_env(monkeypatch):
     monkeypatch.setenv("KOTOBA_ASR_REST_URL", BASE_URL)
     client = kotoba.KotobaClient(api_key="x")
     assert client.url == BASE_URL
+
+
+# ---------- fal provider (Key auth + cold-start probe) --------------------
+
+PROBE_URL = f"{BASE_URL}/model_and_cuda_availability"
+
+# Shrunken probe policy so tests never sleep for real.
+_FAST_FAL = replace(
+    FAL, http_probe=ProbePolicy(probe_interval_s=0.0, deadline_s=5.0)
+)
+
+
+def _fal_client(provider=_FAST_FAL) -> kotoba.KotobaClient:
+    return kotoba.KotobaClient(
+        provider=provider, api_key="fal-secret", url=BASE_URL, max_retries=0
+    )
+
+
+def test_provider_autodetected_from_fal_url(monkeypatch):
+    monkeypatch.delenv("KOTOBA_PROVIDER", raising=False)
+    client = kotoba.KotobaClient(api_key="x", url="https://fal.run/team/app")
+    assert client.provider.name == "fal"
+    # Existing non-fal setup stays on the kotoba provider.
+    assert _client().provider.name == "kotoba"
+
+
+def test_fal_api_key_from_fal_key_env(monkeypatch):
+    monkeypatch.setenv("FAL_KEY", "from-env")
+    monkeypatch.delenv("KOTOBA_API_KEY", raising=False)
+    client = kotoba.KotobaClient(provider="fal", url="https://fal.run/team/app")
+    assert client.api_key == "from-env"
+
+
+@responses.activate
+def test_fal_submit_job_sends_key_auth(fake_wav):
+    responses.add(responses.GET, PROBE_URL, status=200)
+    responses.add(responses.POST, JOBS_URL, json={"job_id": "fal-1"}, status=202)
+    job = _fal_client().asr.submit_job(fake_wav, language="ja")
+    assert job.job_id == "fal-1"
+    for call in responses.calls:
+        assert call.request.headers["Authorization"] == "Key fal-secret"
+
+
+@responses.activate
+def test_fal_probe_waits_for_ready_before_post(fake_wav):
+    responses.add(responses.GET, PROBE_URL, status=503)
+    responses.add(responses.GET, PROBE_URL, status=503)
+    responses.add(responses.GET, PROBE_URL, status=200)
+    responses.add(responses.POST, JOBS_URL, json={"job_id": "cold-1"}, status=202)
+    job = _fal_client().asr.submit_job(fake_wav)
+    assert job.job_id == "cold-1"
+    methods = [call.request.method for call in responses.calls]
+    assert methods == ["GET", "GET", "GET", "POST"]
+
+
+@responses.activate
+def test_fal_probe_401_raises_auth_error_without_post(fake_wav):
+    responses.add(
+        responses.GET, PROBE_URL, json={"detail": "Unauthorized"}, status=401
+    )
+    with pytest.raises(AuthError):
+        _fal_client().asr.submit_job(fake_wav)
+    assert len(responses.calls) == 1
+
+
+@responses.activate
+def test_fal_probe_deadline_raises_worker_startup_error(fake_wav):
+    responses.add(responses.GET, PROBE_URL, status=503)
+    tiny = replace(
+        FAL, http_probe=ProbePolicy(probe_interval_s=0.0, deadline_s=0.0)
+    )
+    with pytest.raises(WorkerStartupError):
+        _fal_client(provider=tiny).asr.submit_job(fake_wav)
+
+
+@responses.activate
+def test_fal_warmup_probes_once_across_submits(fake_wav):
+    responses.add(responses.GET, PROBE_URL, status=200)
+    responses.add(responses.POST, JOBS_URL, json={"job_id": "w-1"}, status=202)
+    responses.add(responses.POST, JOBS_URL, json={"job_id": "w-2"}, status=202)
+    client = _fal_client()
+    client.warmup()
+    client.asr.submit_job(fake_wav)
+    client.asr.submit_job(fake_wav)
+    methods = [call.request.method for call in responses.calls]
+    assert methods == ["GET", "POST", "POST"]
+
+
+@responses.activate
+def test_kotoba_provider_never_probes(fake_wav):
+    responses.add(responses.POST, JOBS_URL, json={"job_id": "k-1"}, status=202)
+    job = _client().asr.submit_job(fake_wav)
+    assert job.job_id == "k-1"
+    assert [call.request.method for call in responses.calls] == ["POST"]
+
+
+# ---------- fal async probe (httpx MockTransport) --------------------------
+
+
+async def test_fal_async_probe_then_warmed():
+    probes = {"count": 0}
+
+    def app(request: httpx.Request) -> httpx.Response:
+        assert request.headers["Authorization"] == "Key fal-secret"
+        assert request.url.path.endswith("/model_and_cuda_availability")
+        probes["count"] += 1
+        return httpx.Response(503 if probes["count"] < 3 else 200)
+
+    session = AsyncHttpSession(
+        base_url=BASE_URL,
+        api_key="fal-secret",
+        timeout=5.0,
+        max_retries=0,
+        provider=_FAST_FAL,
+    )
+    await session._client.aclose()
+    session._client = httpx.AsyncClient(
+        base_url=BASE_URL,
+        transport=httpx.MockTransport(app),
+        headers=_FAST_FAL.auth_headers("fal-secret"),
+    )
+    await session.ensure_ready()
+    assert probes["count"] == 3
+    # Warmed: no further probes.
+    await session.ensure_ready()
+    assert probes["count"] == 3
+    await session.aclose()
+
+
+async def test_fal_async_probe_auth_error():
+    def app(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"detail": "Unauthorized"})
+
+    session = AsyncHttpSession(
+        base_url=BASE_URL,
+        api_key="bad",
+        timeout=5.0,
+        max_retries=0,
+        provider=_FAST_FAL,
+    )
+    await session._client.aclose()
+    session._client = httpx.AsyncClient(
+        base_url=BASE_URL, transport=httpx.MockTransport(app)
+    )
+    with pytest.raises(AuthError):
+        await session.ensure_ready()
+    await session.aclose()

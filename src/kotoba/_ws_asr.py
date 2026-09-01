@@ -21,6 +21,7 @@ import asyncio
 import base64
 from typing import Any, AsyncIterable, Iterable, Union
 
+from kotoba._providers import ProviderConfig
 from kotoba._ws_base import AsyncSession, SyncSession
 from kotoba.errors import APIError, ProtocolError
 from kotoba.models import StreamEvent
@@ -52,12 +53,12 @@ class AsyncASRSession(AsyncSession):
         sample_rate: int = 24000,
         keywords: list[str] | None = None,
         api_key: str | None = None,
+        provider: str | ProviderConfig | None = None,
     ) -> None:
-        super().__init__(url, api_key=api_key)
+        super().__init__(url, api_key=api_key, provider=provider)
         self._language = language
         self._sample_rate = sample_rate
         self._keywords = keywords
-        self._session_ready = asyncio.Event()
         self._event_counter = 0
 
     # -- handshake ---------------------------------------------------------
@@ -194,6 +195,7 @@ class ASRSession(SyncSession):
         sample_rate: int = 24000,
         keywords: list[str] | None = None,
         api_key: str | None = None,
+        provider: str | ProviderConfig | None = None,
     ) -> None:
         super().__init__(
             AsyncASRSession(
@@ -202,6 +204,7 @@ class ASRSession(SyncSession):
                 sample_rate=sample_rate,
                 keywords=keywords,
                 api_key=api_key,
+                provider=provider,
             )
         )
 

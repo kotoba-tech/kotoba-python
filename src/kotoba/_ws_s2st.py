@@ -7,10 +7,10 @@ conversation.item.input_audio_transcription.{text,audio}.delta).
 
 from __future__ import annotations
 
-import asyncio
 import base64
 from typing import Any
 
+from kotoba._providers import ProviderConfig
 from kotoba._ws_base import AsyncSession, SyncSession
 from kotoba.errors import APIError, ProtocolError
 from kotoba.models import StreamEvent
@@ -37,13 +37,13 @@ class AsyncS2STSession(AsyncSession):
         sample_rate: int = 24000,
         delay: int | None = None,
         api_key: str | None = None,
+        provider: str | ProviderConfig | None = None,
     ) -> None:
-        super().__init__(url, api_key=api_key)
+        super().__init__(url, api_key=api_key, provider=provider)
         self._src = src_language
         self._tgt = tgt_language
         self._sample_rate = sample_rate
         self._delay = delay
-        self._session_ready = asyncio.Event()
         self._event_counter = 0
 
     # -- handshake ---------------------------------------------------------
@@ -151,6 +151,7 @@ class S2STSession(SyncSession):
         sample_rate: int = 24000,
         delay: int | None = None,
         api_key: str | None = None,
+        provider: str | ProviderConfig | None = None,
     ) -> None:
         super().__init__(
             AsyncS2STSession(
@@ -160,6 +161,7 @@ class S2STSession(SyncSession):
                 sample_rate=sample_rate,
                 delay=delay,
                 api_key=api_key,
+                provider=provider,
             )
         )
 

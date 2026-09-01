@@ -8,6 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from kotoba._pacing import apace, pace
+from kotoba._providers import ProviderConfig
 from kotoba._ws_s2st import AsyncS2STSession, S2STSession
 from kotoba.audio import load_mono_pcm16_wav, resample_mono_pcm16
 from kotoba.models import S2STResult
@@ -40,8 +41,14 @@ def _chunk_iter(pcm16: bytes, chunk_ms: int = _DEFAULT_CHUNK_MS):
 class S2STClient:
     """Sync S2S translation client."""
 
-    def __init__(self, api_key: str | None) -> None:
+    def __init__(
+        self,
+        api_key: str | None,
+        *,
+        provider: str | ProviderConfig | None = None,
+    ) -> None:
         self._api_key = api_key
+        self._provider = provider
 
     def stream(
         self,
@@ -59,6 +66,7 @@ class S2STClient:
             sample_rate=sample_rate,
             delay=delay,
             api_key=self._api_key,
+            provider=self._provider,
         )
 
     def translate(
@@ -98,8 +106,14 @@ class S2STClient:
 class AsyncS2STClient:
     """Async S2S translation client."""
 
-    def __init__(self, api_key: str | None) -> None:
+    def __init__(
+        self,
+        api_key: str | None,
+        *,
+        provider: str | ProviderConfig | None = None,
+    ) -> None:
         self._api_key = api_key
+        self._provider = provider
 
     def stream(
         self,
@@ -117,6 +131,7 @@ class AsyncS2STClient:
             sample_rate=sample_rate,
             delay=delay,
             api_key=self._api_key,
+            provider=self._provider,
         )
 
     async def translate(

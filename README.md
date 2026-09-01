@@ -27,11 +27,13 @@ The SDK reads configuration from these env vars only — set the ones for the ro
 
 | Variable | Purpose |
 |---|---|
-| `KOTOBA_API_KEY` | Bearer token sent as `Authorization: Bearer …` (REST + WS) |
+| `KOTOBA_API_KEY` | API key sent as `Authorization: Bearer …` (REST + WS); `Authorization: Key …` on the fal provider |
 | `KOTOBA_ASR_REST_URL` | REST API base URL including version prefix, e.g. `https://.../v1` |
 | `KOTOBA_ASR_URL` | WebSocket URL for live ASR, e.g. `wss://.../asr` |
 | `KOTOBA_TTS_JA_URL` | WebSocket URL for Japanese TTS, e.g. `wss://.../tts` |
 | `KOTOBA_S2ST_EN_JA_URL` | WebSocket URL for English-to-Japanese speech translation |
+| `KOTOBA_PROVIDER` | `kotoba` (default) or `fal`; overrides URL auto-detection, overridden by an explicit `provider=` kwarg |
+| `FAL_KEY` | API key fallback when the provider is `fal` (checked before `KOTOBA_API_KEY`) |
 
 You can also register routes from code:
 
@@ -184,6 +186,7 @@ KotobaClient(
     s2st_en_ja_ws_url: str | None = None, # KOTOBA_S2ST_EN_JA_URL
     timeout: float = 30.0,                # per-request HTTP timeout (s)
     max_retries: int = 3,                 # for 429/5xx and network errors
+    provider: str | ProviderConfig | None = None,  # "kotoba" (default) | "fal"
 )
 ```
 
@@ -249,6 +252,7 @@ All inherit from `kotoba.KotobaError`:
 | `ProtocolError` | Other 4xx, or a server `error` frame violating the contract |
 | `APIError` | Transport or 5xx that exhausted retries |
 | `TimeoutError` | HTTP timeout, WS handshake timeout, or `transcribe()` polling deadline exceeded |
+| `WorkerStartupError` | fal worker did not become ready within the cold-start retry/probe deadline (subclass of `TimeoutError`) |
 | `JobNotFoundError` | GET returned 404 |
 | `TranscriptionError` | Job completed in `error` state |
 | `UnsupportedRouteError` | No WS URL registered for the requested `(modality, src, tgt)` |
@@ -256,6 +260,38 @@ All inherit from `kotoba.KotobaError`:
 ### Retry behavior (REST)
 
 Both sync and async clients retry on network errors, 429, and 5xx with exponential backoff. `Retry-After` headers on 429 are honored (async client). 4xx other than 429 raise immediately.
+
+## Fal provider
+
+The same services deployed on [fal.ai](https://fal.ai) differ from the direct Kotoba endpoints in auth scheme and in cold-start behavior (apps scale to zero and can take minutes to boot). Select the fal provider explicitly, or let it auto-detect from a `fal.run` URL:
+
+```python
+import kotoba
+
+client = kotoba.KotobaClient(
+    provider="fal",                       # optional if a URL points at fal.run
+    tts_ja_ws_url="wss://fal.run/<team>/<app>/v2/tts/ws",
+)  # api_key falls back to FAL_KEY, then KOTOBA_API_KEY
+```
+
+What changes in fal mode — call sites stay identical:
+
+- **Auth**: requests carry `Authorization: Key <api_key>` (REST + WS).
+- **WS session-init retry**: capacity rejections ("No available batch slot" and similar) are retried with full-jitter exponential backoff (1 s base, 20 s cap) under a 360 s wall-clock deadline, so a session opened against a cold app blocks until a worker boots instead of failing. Auth errors are never retried, and a mid-stream failure is never silently reconnected.
+- **REST readiness probing**: before a REST submit, the SDK probes the app's readiness endpoint with short sequential probes (30 s each, 2 s apart, 600 s deadline) and sends the real request only once the app answers — a cold request can't be parked and orphaned by the gateway. `client.warmup()` runs the same probe proactively.
+- `WorkerStartupError` (a `TimeoutError` subclass) is raised when a deadline is exhausted.
+
+Policies are tunable by passing a customized `ProviderConfig`:
+
+```python
+from dataclasses import replace
+from kotoba import FAL, KotobaClient, RetryPolicy
+
+patient = replace(FAL, ws_retry=RetryPolicy(deadline_s=900.0))
+client = KotobaClient(provider=patient, tts_ja_ws_url="wss://fal.run/...")
+```
+
+A custom domain fronting a fal deployment is not auto-detected — pass `provider="fal"` explicitly.
 
 ## Development
 

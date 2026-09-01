@@ -43,6 +43,10 @@ class TimeoutError(APIError):  # noqa: A001 — importable as kotoba.TimeoutErro
     """Operation exceeded its deadline (HTTP timeout, polling deadline, etc)."""
 
 
+class WorkerStartupError(TimeoutError):
+    """Provider worker did not become ready within the cold-start deadline."""
+
+
 class JobNotFoundError(APIError):
     """Job ID was rejected by the server with 404."""
 

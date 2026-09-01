@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import Any, AsyncIterator, Iterator
 
+from kotoba._providers import ProviderConfig
 from kotoba._ws_tts import AsyncTTSSession, TTSSession
 from kotoba.models import AudioResult
 from kotoba.routing import endpoint_for
@@ -30,8 +31,14 @@ def _resolve_url(url: str | None, language: str) -> str:
 class TTSClient:
     """Sync TTS client."""
 
-    def __init__(self, api_key: str | None) -> None:
+    def __init__(
+        self,
+        api_key: str | None,
+        *,
+        provider: str | ProviderConfig | None = None,
+    ) -> None:
         self._api_key = api_key
+        self._provider = provider
 
     def stream(
         self,
@@ -47,6 +54,7 @@ class TTSClient:
             speaker_id=speaker_id,
             spk_ref_audio_tokens=spk_ref_audio_tokens,
             api_key=self._api_key,
+            provider=self._provider,
         )
 
     def synthesize_stream(
@@ -106,8 +114,14 @@ class TTSClient:
 class AsyncTTSClient:
     """Async TTS client."""
 
-    def __init__(self, api_key: str | None) -> None:
+    def __init__(
+        self,
+        api_key: str | None,
+        *,
+        provider: str | ProviderConfig | None = None,
+    ) -> None:
         self._api_key = api_key
+        self._provider = provider
 
     def stream(
         self,
@@ -123,6 +137,7 @@ class AsyncTTSClient:
             speaker_id=speaker_id,
             spk_ref_audio_tokens=spk_ref_audio_tokens,
             api_key=self._api_key,
+            provider=self._provider,
         )
 
     async def synthesize_stream(

@@ -29,7 +29,13 @@ from typing import Any, AsyncIterator, Iterator
 import websockets
 import websockets.exceptions
 
-from kotoba.errors import APIError, AuthError, ProtocolError, TimeoutError
+from kotoba._providers import (
+    ProviderConfig,
+    is_retryable_session_error,
+    resolve_provider,
+    retry_session,
+)
+from kotoba.errors import APIError, AuthError, KotobaError, ProtocolError, TimeoutError
 from kotoba.models import StreamEvent
 
 _DONE_SENTINEL: StreamEvent | None = None  # `None` is the "no more events" marker
@@ -48,15 +54,18 @@ class AsyncSession:
         *,
         api_key: str | None = None,
         connect_kwargs: dict[str, Any] | None = None,
+        provider: str | ProviderConfig | None = None,
     ) -> None:
         self._url = url
         self._api_key = api_key
         self._connect_kwargs = connect_kwargs or {}
+        self._provider = resolve_provider(provider, url)
         self._ws: websockets.ClientConnection | None = None
         self._events: asyncio.Queue[StreamEvent | None] = asyncio.Queue()
         self._receiver_task: asyncio.Task[None] | None = None
         self._error: BaseException | None = None
         self._closed = False
+        self._session_ready = asyncio.Event()
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -70,9 +79,24 @@ class AsyncSession:
     async def start(self) -> None:
         if self._ws is not None:
             return
+        policy = self._provider.ws_retry
+        if policy is None:
+            await self._connect_once()
+            return
+        # Cold-start providers (fal): capacity rejections during session
+        # init are retried under the policy deadline. Mid-stream failures
+        # are never retried.
+        await retry_session(
+            self._connect_once,
+            policy,
+            retryable=lambda exc: is_retryable_session_error(
+                exc, self._provider.retryable_markers
+            ),
+        )
+
+    async def _connect_once(self) -> None:
         headers: dict[str, str] = {}
-        if self._api_key:
-            headers["Authorization"] = f"Bearer {self._api_key}"
+        headers.update(self._provider.auth_headers(self._api_key))
 
         connect_kwargs: dict[str, Any] = {
             "additional_headers": headers,
@@ -81,6 +105,8 @@ class AsyncSession:
             "close_timeout": 0.5,
             "max_size": 10 * 1024 * 1024,
         }
+        if self._provider.connect_overrides:
+            connect_kwargs.update(self._provider.connect_overrides)
         connect_kwargs.update(self._connect_kwargs)
 
         try:
@@ -90,18 +116,70 @@ class AsyncSession:
             code = getattr(status, "status_code", None) if status is not None else None
             if code in (401, 403):
                 raise AuthError(f"WebSocket auth rejected by {self._url} (status {code})") from exc
-            raise APIError(f"WebSocket handshake failed: {exc}") from exc
+            raise APIError(
+                f"WebSocket handshake failed: {exc}", status_code=code
+            ) from exc
         except OSError as exc:
             raise APIError(f"Could not reach {self._url}: {exc}") from exc
 
         self._receiver_task = asyncio.create_task(self._receiver_loop())
-        try:
-            await asyncio.wait_for(self._handshake(), timeout=self.handshake_timeout)
-        except asyncio.TimeoutError as exc:
-            await self.close()
+        # Race the handshake against the receiver: a server that answers
+        # session init with an error frame (or just closes) must surface
+        # that error now, not a generic timeout handshake_timeout later.
+        handshake_task = asyncio.create_task(self._handshake())
+        done, _pending = await asyncio.wait(
+            {handshake_task, self._receiver_task},
+            timeout=self.handshake_timeout,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        if handshake_task in done:
+            exc = handshake_task.exception()
+            if exc is None:
+                return
+            await self._abort_attempt()
+            if isinstance(exc, KotobaError):
+                raise exc
+            raise APIError(f"Session handshake failed: {exc!r}") from exc
+
+        handshake_task.cancel()
+        with suppress(asyncio.CancelledError, Exception):
+            await handshake_task
+
+        if not done:
+            await self._abort_attempt()
             raise TimeoutError(
                 f"Timed out waiting for session handshake after {self.handshake_timeout}s"
-            ) from exc
+            )
+
+        # Receiver finished before the handshake: the server rejected the
+        # session (error frame -> self._error) or dropped the connection.
+        error = self._error
+        await self._abort_attempt()
+        if error is not None:
+            raise error
+        raise APIError("Connection closed during session init")
+
+    async def _abort_attempt(self) -> None:
+        """Tear down a failed connection attempt so a retry starts pristine.
+
+        Unlike ``close()`` this does not mark the session closed and does
+        not enqueue the done-sentinel — the queue and ready-event are
+        recreated (not drained) so no stale sentinel or error can leak into
+        a later successful attempt.
+        """
+        if self._receiver_task is not None and not self._receiver_task.done():
+            self._receiver_task.cancel()
+            with suppress(asyncio.CancelledError, Exception):
+                await self._receiver_task
+        self._receiver_task = None
+        if self._ws is not None:
+            with suppress(Exception):
+                await self._ws.close()
+            self._ws = None
+        self._events = asyncio.Queue()
+        self._error = None
+        self._session_ready = asyncio.Event()
 
     async def close(self) -> None:
         if self._closed:

@@ -23,6 +23,7 @@ from typing import AsyncIterator, Iterator
 
 from kotoba._http import AsyncHttpSession, HttpSession
 from kotoba._pacing import apace, pace
+from kotoba._providers import ProviderConfig
 from kotoba._ws_asr import AsyncASRSession, ASRSession, AudioSource
 from kotoba.errors import JobNotFoundError, TimeoutError, TranscriptionError
 from kotoba.models import JobIDResponse, JobState, JobStatus, TranscriptResult
@@ -72,11 +73,22 @@ class ASRClient:
         http: HttpSession | None = None,
         *,
         api_key: str | None = None,
+        provider: str | ProviderConfig | None = None,
     ) -> None:
         self._http = http
         self._api_key = api_key
+        self._provider = provider
 
     # ---------- REST ------------------------------------------------------
+
+    def warmup(self) -> None:
+        """Wait until the REST endpoint is ready to serve (cold start).
+
+        No-op for providers without a probe policy; ``submit_job`` also
+        probes automatically, so calling this is optional.
+        """
+        self._require_http()
+        self._http.ensure_ready()
 
     def submit_job(
         self,
@@ -88,6 +100,7 @@ class ASRClient:
         """POST an audio file, return the server-assigned job_id."""
 
         self._require_http()
+        self._http.ensure_ready()
         path = Path(audio_file_path)
         content_type = _guess_content_type(path)
         with path.open("rb") as f:
@@ -177,6 +190,7 @@ class ASRClient:
             sample_rate=sample_rate,
             keywords=keywords,
             api_key=self._api_key,
+            provider=self._provider,
         )
 
     def _transcribe_file_ws(
@@ -278,11 +292,18 @@ class AsyncASRClient:
         http: AsyncHttpSession | None = None,
         *,
         api_key: str | None = None,
+        provider: str | ProviderConfig | None = None,
     ) -> None:
         self._http = http
         self._api_key = api_key
+        self._provider = provider
 
     # ---------- REST ------------------------------------------------------
+
+    async def warmup(self) -> None:
+        """Async mirror of :meth:`ASRClient.warmup`."""
+        self._require_http()
+        await self._http.ensure_ready()
 
     async def submit_job(
         self,
@@ -292,6 +313,7 @@ class AsyncASRClient:
         with_timestamps: bool = False,
     ) -> JobIDResponse:
         self._require_http()
+        await self._http.ensure_ready()
         path = Path(audio_file_path)
         content_type = _guess_content_type(path)
         data_bytes = await asyncio.to_thread(path.read_bytes)
@@ -377,6 +399,7 @@ class AsyncASRClient:
             sample_rate=sample_rate,
             keywords=keywords,
             api_key=self._api_key,
+            provider=self._provider,
         )
 
     async def _transcribe_file_ws(
