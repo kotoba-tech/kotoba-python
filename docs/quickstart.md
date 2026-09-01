@@ -18,11 +18,19 @@ Only the routes you actually call need to be set. You can also register routes f
 
 ### Using the fal.ai deployments
 
-For the services deployed on fal.ai, export `FAL_KEY` and point the URLs at your fal app — the SDK auto-detects `fal.run` hosts and switches to `Authorization: Key …` auth with cold-start handling (session-init retry + readiness probing) enabled:
+For the services deployed on fal.ai, export `FAL_KEY` and point the URLs at your fal apps — the SDK auto-detects `fal.run` hosts and switches to `Authorization: Key …` auth with cold-start handling (session-init retry + readiness probing) enabled. The four apps and their endpoint paths:
+
+| Service | Env var | URL shape |
+|---|---|---|
+| Streaming ASR (WS) | `KOTOBA_ASR_URL` | `wss://fal.run/<team>/<asr-app>/v1/realtime` |
+| Batch ASR (REST) | `KOTOBA_ASR_REST_URL` | `https://fal.run/<team>/<stt-app>` (app root — the SDK calls `POST /v1/speech-to-text`) |
+| TTS (WS) | `KOTOBA_TTS_JA_URL` | `wss://fal.run/<team>/<tts-app>/v2/tts/ws` |
+| S2ST (WS) | `KOTOBA_S2ST_EN_JA_URL` | `wss://fal.run/<team>/<sts-app>/v1/realtime_voice` |
 
 ```bash
 export FAL_KEY=...
-export KOTOBA_TTS_JA_URL=wss://fal.run/<team>/<app>/v2/tts/ws
+export KOTOBA_TTS_JA_URL=wss://fal.run/<team>/<tts-app>/v2/tts/ws
+export KOTOBA_ASR_REST_URL=https://fal.run/<team>/<stt-app>
 ```
 
 ```python
@@ -30,9 +38,15 @@ import kotoba
 
 client = kotoba.KotobaClient(provider="fal")   # explicit; auto-detected from fal.run URLs too
 result = client.tts.synthesize("こんにちは、世界。", language="ja")
+transcript = client.asr.transcribe("sample.wav", language="ja")  # one-shot POST on fal
 ```
 
-The first call against a cold app blocks (bounded by the retry deadline) while the worker boots; everything after that behaves exactly like the direct endpoints.
+The first call against a cold app blocks (bounded by the retry deadline) while the worker boots; everything after that behaves exactly like the direct endpoints. To watch what a cold-start wait is doing, enable INFO logging — every retry and readiness probe is logged with its underlying error:
+
+```python
+import logging
+logging.basicConfig(level=logging.INFO)  # kotoba.* loggers report each retry/probe
+```
 
 ## 2. Install
 
