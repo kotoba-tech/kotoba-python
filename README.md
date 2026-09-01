@@ -169,8 +169,14 @@ Each example under `examples/` is runnable with `uv run examples/<file>.py` and 
 | `tts_stream_async.py` | One-shot text in → streamed audio chunks with first-audio-latency timing | `KOTOBA_API_KEY`, `KOTOBA_TTS_JA_URL` |
 | `s2st_stream_async.py` | File in → live transcript + translated WAV out | `KOTOBA_API_KEY`, `KOTOBA_S2ST_EN_JA_URL` |
 | `s2st_mic_async.py` | **Live microphone** in → translated WAV out (Ctrl-C to stop). Requires `pip install 'kotoba-sdk[mic]'` and PortAudio. | `KOTOBA_API_KEY`, `KOTOBA_S2ST_EN_JA_URL` |
+| `fal_asr_rest_sync.py` | Batch ASR on **fal** — `warmup()` + one-shot `POST /v1/speech-to-text` | `FAL_KEY`, `KOTOBA_ASR_REST_URL` (app root) |
+| `fal_tts_stream_async.py` | Streaming TTS on **fal** — cold-start retry visible via INFO logs | `FAL_KEY`, `KOTOBA_TTS_JA_URL` |
+| `fal_s2st_stream_async.py` | Streaming S2ST on **fal** (`/v1/realtime_voice` path) | `FAL_KEY`, `KOTOBA_S2ST_EN_JA_URL` |
+| `fal_smoke.py` | Live end-to-end check of all four fal apps | `FAL_KEY`, `FAL_TEAM` (see docstring) |
 
 REST is shown in both sync + async because the context-manager pattern matters for resource cleanup. Streaming examples are async-by-default — wrap with `kotoba.KotobaClient()` for sync (the snippets above show the conversion).
+
+Every non-fal example also runs against the fal deployments unchanged — export `FAL_KEY` and point the URL env vars at `fal.run` URLs; the provider is auto-detected. The `fal_*` variants just make the fal-specific behavior (warmup, one-shot batch, cold-start logging) explicit.
 
 ## Public API
 
