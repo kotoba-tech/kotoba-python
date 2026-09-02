@@ -2,8 +2,8 @@
 
 Two transports exposed through the same facade:
 
-- **REST** (``submit_job`` / ``get_job`` / ``transcribe``): POST an audio file
-  and poll until the job finishes. Best for batch / non-interactive use.
+- **REST** (``transcribe``): one synchronous ``POST /v1/speech-to-text``
+  with the audio file. Best for batch / non-interactive use.
 - **WebSocket** (``stream`` / ``transcribe_stream``): push audio chunks and
   receive partial transcripts as they're produced. Best for live / latency-
   sensitive use.
@@ -15,9 +15,7 @@ The default ``transcribe(path)`` uses REST; call ``stream(...)`` or
 from __future__ import annotations
 
 import asyncio
-import logging
 import mimetypes
-import time
 from contextlib import suppress
 from pathlib import Path
 from typing import AsyncIterator, Iterator
@@ -26,13 +24,10 @@ from kotoba._http import AsyncHttpSession, HttpSession
 from kotoba._pacing import apace, pace
 from kotoba._providers import ProviderConfig
 from kotoba._ws_asr import AsyncASRSession, ASRSession, AudioSource
-from kotoba.errors import JobNotFoundError, TimeoutError, TranscriptionError
-from kotoba.models import JobIDResponse, JobState, JobStatus, TranscriptResult
+from kotoba.models import TranscriptResult
 
 
-DEFAULT_TIMEOUT = 1200.0  # 20 min; REST poll deadline
-
-logger = logging.getLogger(__name__)
+DEFAULT_TIMEOUT = 1200.0  # 20 min; bound on the one-shot REST request
 _WS_DEFAULT_SAMPLE_RATE = 24000
 _WS_DEFAULT_CHUNK_MS = 200
 _WS_DEFAULT_CHUNK_S = _WS_DEFAULT_CHUNK_MS / 1000.0
@@ -68,6 +63,33 @@ def _chunk_iter(pcm16: bytes, sample_rate: int, chunk_ms: int = _WS_DEFAULT_CHUN
         yield pcm16[i : i + chunk_bytes]
 
 
+def _batch_endpoint(http: HttpSession | AsyncHttpSession) -> str:
+    """Resolve the one-shot endpoint path against the session's base URL.
+
+    The path carries its own version prefix (``/v1/...``); a base URL that
+    already ends with that prefix (the older documented convention) is not
+    doubled.
+    """
+
+    path = http.provider.batch_transcribe_path
+    prefix = "/" + path.strip("/").split("/", 1)[0]
+    if http.base_url.endswith(prefix) and path.startswith(prefix + "/"):
+        return path[len(prefix):]
+    return path
+
+
+def _app_key_headers(api_key: str | None) -> dict[str, str]:
+    # The fal gateway consumes Authorization; xi-api-key passes through and
+    # satisfies the app's own token requirement. Harmless elsewhere.
+    return {"xi-api-key": api_key} if api_key else {}
+
+
+def _parse_transcript(payload: dict) -> TranscriptResult:
+    # Everything but the text (e.g. audio_duration_secs) rides along as metadata.
+    metadata = {k: v for k, v in payload.items() if k != "text"}
+    return TranscriptResult(text=str(payload.get("text") or ""), metadata=metadata)
+
+
 class ASRClient:
     """Sync client exposing both REST and WebSocket ASR entry points."""
 
@@ -87,140 +109,37 @@ class ASRClient:
     def warmup(self) -> None:
         """Wait until the REST endpoint is ready to serve (cold start).
 
-        No-op for providers without a probe policy; ``submit_job`` also
+        No-op for providers without a probe policy; ``transcribe`` also
         probes automatically, so calling this is optional.
         """
         self._require_http()
         self._http.ensure_ready()
-
-    def submit_job(
-        self,
-        audio_file_path: str | Path,
-        *,
-        language: str = "ja",
-        with_timestamps: bool = False,
-    ) -> JobIDResponse:
-        """POST an audio file, return the server-assigned job_id."""
-
-        self._require_http()
-        self._http.ensure_ready()
-        path = Path(audio_file_path)
-        content_type = _guess_content_type(path)
-        with path.open("rb") as f:
-            response = self._http.post(
-                "/transcription_jobs",
-                files={"file": (path.name, f, content_type)},
-                data={
-                    "language": language,
-                    "with_timestamps": str(with_timestamps).lower(),
-                },
-            )
-        return JobIDResponse(**response.json())
-
-    def get_job(self, job_id: str) -> JobStatus:
-        """GET the status of a job. 202 → processing, 404 → JobNotFoundError."""
-
-        self._require_http()
-        response = self._http.get(
-            f"/transcription_jobs/{job_id}",
-            allow_statuses=(200, 202, 404),
-        )
-        if response.status_code == 202:
-            return JobStatus(state=JobState.processing)
-        if response.status_code == 404:
-            raise JobNotFoundError(
-                f"Job {job_id} not found", status_code=404, payload={}
-            )
-        return JobStatus(**response.json())
 
     def transcribe(
         self,
         audio_file_path: str | Path,
         *,
         language: str = "ja",
-        with_timestamps: bool = False,
-        poll_interval: float = 1.0,
-        poll_backoff: float = 1.5,
-        max_poll_interval: float = 10.0,
         timeout: float = DEFAULT_TIMEOUT,
     ) -> TranscriptResult:
-        """REST transcription. Returns the final transcript.
+        """Transcribe a file in one synchronous ``POST /v1/speech-to-text``.
 
-        On the kotoba provider this is submit + poll against the job API.
-        On providers with a one-shot batch endpoint (fal), the file is sent
-        in a single synchronous POST and ``timeout`` bounds that request;
-        the polling parameters are unused.
+        ``timeout`` bounds the single request (long files take a while on
+        the server). On cold-start providers a readiness probe runs first.
         """
 
         self._require_http()
-        one_shot = self._http.provider.batch_transcribe_path
-        if one_shot is not None:
-            return self._transcribe_one_shot(
-                Path(audio_file_path),
-                endpoint=one_shot,
-                language=language,
-                with_timestamps=with_timestamps,
-                timeout=timeout,
-            )
-
-        job = self.submit_job(
-            audio_file_path,
-            language=language,
-            with_timestamps=with_timestamps,
-        )
-        deadline = time.monotonic() + timeout
-        interval = poll_interval
-
-        while True:
-            status = self.get_job(job.job_id)
-            if status.state == JobState.done:
-                return TranscriptResult(
-                    text=status.transcription or "",
-                    job_id=job.job_id,
-                    segments=status.segments,
-                )
-            if status.state == JobState.error:
-                raise TranscriptionError(
-                    status.error_message or "Transcription failed",
-                    payload={"job_id": job.job_id},
-                )
-            if time.monotonic() >= deadline:
-                raise TimeoutError(
-                    f"Job {job.job_id} did not complete within {timeout}s",
-                    payload={"job_id": job.job_id},
-                )
-            time.sleep(interval)
-            interval = min(interval * poll_backoff, max_poll_interval)
-
-    def _transcribe_one_shot(
-        self,
-        path: Path,
-        *,
-        endpoint: str,
-        language: str,
-        with_timestamps: bool,
-        timeout: float,
-    ) -> TranscriptResult:
-        if with_timestamps:
-            logger.warning(
-                "with_timestamps is not supported by the one-shot %s endpoint; "
-                "ignoring",
-                endpoint,
-            )
         self._http.ensure_ready()
-        # The gateway consumes Authorization; xi-api-key passes through and
-        # satisfies the app's own token requirement.
-        headers = {"xi-api-key": self._api_key} if self._api_key else {}
+        path = Path(audio_file_path)
         with path.open("rb") as f:
             response = self._http.post(
-                endpoint,
+                _batch_endpoint(self._http),
                 files={"file": (path.name, f, _guess_content_type(path))},
                 data={"language": language, "file_format": "other"},
-                headers=headers,
+                headers=_app_key_headers(self._api_key),
                 timeout=timeout,
             )
-        payload = response.json()
-        return TranscriptResult(text=str(payload.get("text") or ""))
+        return _parse_transcript(response.json())
 
     # ---------- WebSocket -------------------------------------------------
 
@@ -330,7 +249,7 @@ class ASRClient:
         if self._http is None:
             raise RuntimeError(
                 "REST endpoint not configured. Pass url=... to KotobaClient "
-                "to enable transcribe() / submit_job() / get_job()."
+                "to enable transcribe()."
             )
 
 
@@ -355,122 +274,27 @@ class AsyncASRClient:
         self._require_http()
         await self._http.ensure_ready()
 
-    async def submit_job(
-        self,
-        audio_file_path: str | Path,
-        *,
-        language: str = "ja",
-        with_timestamps: bool = False,
-    ) -> JobIDResponse:
-        self._require_http()
-        await self._http.ensure_ready()
-        path = Path(audio_file_path)
-        content_type = _guess_content_type(path)
-        data_bytes = await asyncio.to_thread(path.read_bytes)
-        response = await self._http.post(
-            "/transcription_jobs",
-            files={"file": (path.name, data_bytes, content_type)},
-            data={
-                "language": language,
-                "with_timestamps": str(with_timestamps).lower(),
-            },
-        )
-        return JobIDResponse(**response.json())
-
-    async def get_job(self, job_id: str) -> JobStatus:
-        self._require_http()
-        response = await self._http.get(
-            f"/transcription_jobs/{job_id}",
-            allow_statuses=(200, 202, 404),
-        )
-        if response.status_code == 202:
-            return JobStatus(state=JobState.processing)
-        if response.status_code == 404:
-            raise JobNotFoundError(
-                f"Job {job_id} not found", status_code=404, payload={}
-            )
-        return JobStatus(**response.json())
-
     async def transcribe(
         self,
         audio_file_path: str | Path,
         *,
         language: str = "ja",
-        with_timestamps: bool = False,
-        poll_interval: float = 1.0,
-        poll_backoff: float = 1.5,
-        max_poll_interval: float = 10.0,
         timeout: float = DEFAULT_TIMEOUT,
     ) -> TranscriptResult:
-        """Async mirror of :meth:`ASRClient.transcribe` (same dispatch)."""
+        """Async mirror of :meth:`ASRClient.transcribe`."""
 
         self._require_http()
-        one_shot = self._http.provider.batch_transcribe_path
-        if one_shot is not None:
-            return await self._transcribe_one_shot(
-                Path(audio_file_path),
-                endpoint=one_shot,
-                language=language,
-                with_timestamps=with_timestamps,
-                timeout=timeout,
-            )
-
-        job = await self.submit_job(
-            audio_file_path,
-            language=language,
-            with_timestamps=with_timestamps,
-        )
-        deadline = time.monotonic() + timeout
-        interval = poll_interval
-
-        while True:
-            status = await self.get_job(job.job_id)
-            if status.state == JobState.done:
-                return TranscriptResult(
-                    text=status.transcription or "",
-                    job_id=job.job_id,
-                    segments=status.segments,
-                )
-            if status.state == JobState.error:
-                raise TranscriptionError(
-                    status.error_message or "Transcription failed",
-                    payload={"job_id": job.job_id},
-                )
-            if time.monotonic() >= deadline:
-                raise TimeoutError(
-                    f"Job {job.job_id} did not complete within {timeout}s",
-                    payload={"job_id": job.job_id},
-                )
-            await asyncio.sleep(interval)
-            interval = min(interval * poll_backoff, max_poll_interval)
-
-    async def _transcribe_one_shot(
-        self,
-        path: Path,
-        *,
-        endpoint: str,
-        language: str,
-        with_timestamps: bool,
-        timeout: float,
-    ) -> TranscriptResult:
-        if with_timestamps:
-            logger.warning(
-                "with_timestamps is not supported by the one-shot %s endpoint; "
-                "ignoring",
-                endpoint,
-            )
         await self._http.ensure_ready()
-        headers = {"xi-api-key": self._api_key} if self._api_key else {}
+        path = Path(audio_file_path)
         data_bytes = await asyncio.to_thread(path.read_bytes)
         response = await self._http.post(
-            endpoint,
+            _batch_endpoint(self._http),
             files={"file": (path.name, data_bytes, _guess_content_type(path))},
             data={"language": language, "file_format": "other"},
-            headers=headers,
+            headers=_app_key_headers(self._api_key),
             timeout=timeout,
         )
-        payload = response.json()
-        return TranscriptResult(text=str(payload.get("text") or ""))
+        return _parse_transcript(response.json())
 
     # ---------- WebSocket -------------------------------------------------
 

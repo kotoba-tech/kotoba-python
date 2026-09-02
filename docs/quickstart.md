@@ -8,7 +8,7 @@ Request a sandbox key from your Kotoba contact. Set it — along with the endpoi
 
 ```bash
 export KOTOBA_API_KEY=sk_...
-export KOTOBA_ASR_REST_URL=https://.../v1            # batch ASR (default transport)
+export KOTOBA_ASR_REST_URL=https://<host>            # batch ASR (server root)
 export KOTOBA_ASR_URL=wss://.../asr                  # live streaming ASR
 export KOTOBA_S2ST_EN_JA_URL=wss://.../sts           # speech-to-speech en -> ja
 export KOTOBA_TTS_JA_URL=wss://.../tts               # streaming TTS (ja)
@@ -100,7 +100,7 @@ Async version: replace `with` with `async with` and add `await` to each call. Se
 
 ASR has two transports. Pick by use case:
 
-- **REST** (`client.asr.transcribe`) — POST + poll. Default for batch / file-based work. Best for long files, scales naturally on the server, supports per-segment timestamps.
+- **REST** (`client.asr.transcribe`) — one synchronous `POST /v1/speech-to-text`. Default for batch / file-based work.
 - **WebSocket** (`client.asr.stream` / `client.asr.transcribe_stream`) — push PCM16 chunks, read partial transcripts as they arrive. Best for live mic / latency-sensitive pipelines.
 
 ### REST batch
@@ -113,14 +113,7 @@ result = client.asr.transcribe("clip.mp3", language="ja")
 print(result.text)
 ```
 
-With per-segment timestamps:
-
-```python
-result = client.asr.transcribe("clip.mp3", language="ja", with_timestamps=True)
-print(result.text)
-for seg in result.segments:
-    print(f"{seg.start:6.2f} - {seg.end:6.2f}  {seg.text}")
-```
+Extra response fields (e.g. `audio_duration_secs`) are available in `result.metadata`.
 
 `transcribe()` accepts any audio format `soundfile` can decode (WAV / FLAC / OGG / MP3 / …) — the SDK uploads the file as-is and the server does the heavy lifting.
 

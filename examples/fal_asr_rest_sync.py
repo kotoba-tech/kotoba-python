@@ -1,13 +1,9 @@
 """Sync batch ASR against the Fal deployment.
 
-On the fal provider, ``transcribe()`` is a single synchronous
-``POST /v1/speech-to-text`` (no job submit + poll), and a readiness probe
-runs first so a cold request is never parked on a booting app.
-``warmup()`` makes that wait explicit; it is optional — ``transcribe()``
-probes automatically.
-
-Notes vs the kotoba provider: point ``KOTOBA_ASR_REST_URL`` at the app
-*root* (no ``/v1`` suffix), and per-segment timestamps are not available.
+Same ``transcribe()`` call as ``asr_rest_sync.py``; on the fal provider a
+readiness probe runs first so a cold request is never parked on a booting
+app. ``warmup()`` makes that wait explicit; it is optional —
+``transcribe()`` probes automatically.
 
 Usage:
     export FAL_KEY=...

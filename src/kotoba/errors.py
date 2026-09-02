@@ -1,8 +1,4 @@
-"""Typed exceptions raised by the Kotoba REST SDK.
-
-Shape mirrors kotoba-python so code that catches one can usually catch the
-other. ``TranscriptionError`` / ``JobNotFoundError`` are REST-specific.
-"""
+"""Typed exceptions raised by the Kotoba SDK (REST + WebSocket)."""
 
 from __future__ import annotations
 
@@ -45,14 +41,6 @@ class TimeoutError(APIError):  # noqa: A001 — importable as kotoba.TimeoutErro
 
 class WorkerStartupError(TimeoutError):
     """Provider worker did not become ready within the cold-start deadline."""
-
-
-class JobNotFoundError(APIError):
-    """Job ID was rejected by the server with 404."""
-
-
-class TranscriptionError(APIError):
-    """Server reported a final error state for the transcription job."""
 
 
 class UnsupportedRouteError(KotobaError):

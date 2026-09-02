@@ -7,19 +7,14 @@ from kotoba.client import AsyncKotobaClient, KotobaClient
 from kotoba.errors import (
     APIError,
     AuthError,
-    JobNotFoundError,
     KotobaError,
     ProtocolError,
     TimeoutError,
-    TranscriptionError,
     UnsupportedRouteError,
     WorkerStartupError,
 )
 from kotoba.models import (
     AudioResult,
-    JobIDResponse,
-    JobState,
-    JobStatus,
     S2STResult,
     Segment,
     SessionConfig,
@@ -43,9 +38,6 @@ __all__ = [
     "S2STClient",
     "AsyncS2STClient",
     # Data models
-    "JobIDResponse",
-    "JobState",
-    "JobStatus",
     "Segment",
     "TranscriptResult",
     "AudioResult",
@@ -65,8 +57,6 @@ __all__ = [
     "ProtocolError",
     "TimeoutError",
     "WorkerStartupError",
-    "JobNotFoundError",
-    "TranscriptionError",
     "UnsupportedRouteError",
     # Routing
     "endpoint_for",

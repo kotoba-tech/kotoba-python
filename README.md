@@ -28,7 +28,7 @@ The SDK reads configuration from these env vars only — set the ones for the ro
 | Variable | Purpose |
 |---|---|
 | `KOTOBA_API_KEY` | API key sent as `Authorization: Bearer …` (REST + WS); `Authorization: Key …` on the fal provider |
-| `KOTOBA_ASR_REST_URL` | REST API base URL including version prefix, e.g. `https://.../v1` |
+| `KOTOBA_ASR_REST_URL` | REST base URL — the server root, e.g. `https://asr.example.com`; `transcribe()` posts to `/v1/speech-to-text` beneath it (a trailing `/v1` is tolerated) |
 | `KOTOBA_ASR_URL` | WebSocket URL for live ASR, e.g. `wss://.../asr` |
 | `KOTOBA_TTS_JA_URL` | WebSocket URL for Japanese TTS, e.g. `wss://.../tts` |
 | `KOTOBA_S2ST_EN_JA_URL` | WebSocket URL for English-to-Japanese speech translation |
@@ -149,7 +149,7 @@ The sync wrapper runs an `asyncio` loop on a background daemon thread, so the un
 | Module | What |
 |---|---|
 | `kotoba.KotobaClient` / `AsyncKotobaClient` | Top-level entry point |
-| `client.asr.transcribe(path, ...)` | **REST** batch transcription with optional `with_timestamps=True` |
+| `client.asr.transcribe(path, ...)` | **REST** batch transcription — one synchronous `POST /v1/speech-to-text` |
 | `client.asr.stream(...)` / `transcribe_stream(iter)` | Streaming ASR (Japanese, English) over WebSocket |
 | `client.tts.stream(...)` / `synthesize(...)` / `synthesize_stream(...)` | Streaming TTS (Japanese) |
 | `client.s2st.stream(...)` / `translate(...)` | Streaming speech-to-speech translation |
@@ -162,7 +162,7 @@ Each example under `examples/` is runnable with `uv run examples/<file>.py` and 
 
 | File | What it shows | Required env |
 |---|---|---|
-| `asr_rest_sync.py` | REST batch transcription with `with_timestamps=True`, sync | `KOTOBA_API_KEY`, `KOTOBA_ASR_REST_URL` |
+| `asr_rest_sync.py` | REST batch transcription (one-shot POST), sync | `KOTOBA_API_KEY`, `KOTOBA_ASR_REST_URL` |
 | `asr_rest_async.py` | Same, async with `AsyncKotobaClient` context manager | `KOTOBA_API_KEY`, `KOTOBA_ASR_REST_URL` |
 | `asr_stream_async.py` | Live ASR via `transcribe_stream(generator)` with first-token-latency measurement | `KOTOBA_API_KEY`, `KOTOBA_ASR_URL` |
 | `tts_synthesize_sync.py` | One-shot TTS with explicit `speaker_id` | `KOTOBA_API_KEY`, `KOTOBA_TTS_JA_URL` |
@@ -212,26 +212,11 @@ transcribe(
     audio_file_path: str | Path,
     *,
     language: str = "ja",
-    with_timestamps: bool = False,  # ask server for per-segment timestamps
-    poll_interval: float = 1.0,     # initial GET polling interval (s)
-    poll_backoff: float = 1.5,      # multiplied each poll
-    max_poll_interval: float = 10.0,
-    timeout: float = 1200.0,        # overall deadline for job completion
+    timeout: float = 1200.0,        # bound on the single request
 ) -> TranscriptResult
 ```
 
-POSTs the file, polls `GET /transcription_jobs/{id}` with exponential backoff, returns the final transcript. Raises `TranscriptionError` on server-reported failure, `TimeoutError` if the deadline elapses.
-
-When `with_timestamps=True`, `TranscriptResult.segments` is populated with `[Segment(text, start, end), …]`.
-
-### Low-level REST helpers
-
-```python
-client.asr.submit_job(path, language="ja") -> JobIDResponse  # POST
-client.asr.get_job(job_id)                -> JobStatus       # GET, 202→processing
-```
-
-`JobStatus.state` is one of `JobState.processing | done | error`. For `done`, read `.transcription`; for `error`, read `.error_message`.
+Uploads the file in one synchronous `POST /v1/speech-to-text` and returns the transcript; any extra response fields (e.g. `audio_duration_secs`) land in `TranscriptResult.metadata`. Raises `TimeoutError` if the request exceeds `timeout`. On the fal provider a readiness probe precedes the request (see below); `client.warmup()` runs it explicitly.
 
 ### WebSocket entry points
 
@@ -260,8 +245,6 @@ All inherit from `kotoba.KotobaError`:
 | `APIError` | Transport or 5xx that exhausted retries |
 | `TimeoutError` | HTTP timeout, WS handshake timeout, or `transcribe()` polling deadline exceeded |
 | `WorkerStartupError` | fal worker did not become ready within the cold-start retry/probe deadline (subclass of `TimeoutError`) |
-| `JobNotFoundError` | GET returned 404 |
-| `TranscriptionError` | Job completed in `error` state |
 | `UnsupportedRouteError` | No WS URL registered for the requested `(modality, src, tgt)` |
 
 ### Retry behavior (REST)
@@ -295,7 +278,7 @@ What changes in fal mode — call sites stay identical:
 - **Auth**: requests carry `Authorization: Key <api_key>` (REST + WS).
 - **WS session-init retry**: capacity rejections ("No available batch slot" and similar) are retried with full-jitter exponential backoff (1 s base, 20 s cap) under a 360 s wall-clock deadline, so a session opened against a cold app blocks until a worker boots instead of failing. Auth errors are never retried, and a mid-stream failure is never silently reconnected.
 - **REST readiness probing**: before a REST submit, the SDK probes the app's readiness endpoint with short sequential probes (30 s each, 2 s apart, 600 s deadline) and sends the real request only once the app answers — a cold request can't be parked and orphaned by the gateway. `client.warmup()` runs the same probe proactively.
-- **One-shot batch transcription**: the fal batch STT app serves a synchronous `POST /v1/speech-to-text` instead of the job API, so `asr.transcribe()` transparently uses it (single request, `timeout` bounds it; polling params and `with_timestamps` are unused). Point `url=` at the app root, e.g. `https://fal.run/<team>/<app>`.
+- **Batch transcription** is the same one-shot `POST /v1/speech-to-text` as everywhere else; point `url=` at the app root, e.g. `https://fal.run/<team>/<app>`.
 - `WorkerStartupError` (a `TimeoutError` subclass) is raised when a deadline is exhausted; its message includes the last underlying error.
 - **Observability**: every retry and readiness probe logs at INFO on the `kotoba.*` loggers with the underlying error — `logging.basicConfig(level=logging.INFO)` shows what a cold-start wait is doing.
 

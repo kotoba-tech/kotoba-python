@@ -5,7 +5,7 @@ context manager so the underlying HTTP pool is closed on exit.
 
 Usage:
     export KOTOBA_API_KEY=...
-    export KOTOBA_ASR_REST_URL=https://.../v1
+    export KOTOBA_ASR_REST_URL=https://<host>          # server root
     uv run examples/asr_rest_async.py [path/to/clip.mp3]
 """
 
@@ -22,12 +22,8 @@ DEFAULT_AUDIO = Path(__file__).parent / "audio" / "ja" / "example.mp3"
 
 async def main(input_audio: str, language: str) -> None:
     async with kotoba.AsyncKotobaClient() as client:
-        result = await client.asr.transcribe(
-            input_audio, language=language, with_timestamps=True
-        )
+        result = await client.asr.transcribe(input_audio, language=language)
     print(result.text)
-    for seg in result.segments or []:
-        print(f"{seg.start:6.2f} - {seg.end:6.2f}  {seg.text}")
 
 
 if __name__ == "__main__":

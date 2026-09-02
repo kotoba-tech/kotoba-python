@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from enum import Enum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -45,18 +44,6 @@ class StreamEvent(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class JobState(str, Enum):
-    processing = "processing"
-    done = "done"
-    error = "error"
-
-
-class JobIDResponse(BaseModel):
-    """POST /transcription_jobs body."""
-
-    job_id: str
-
-
 class Segment(BaseModel):
     """Per-chunk timestamped transcript fragment."""
 
@@ -65,31 +52,17 @@ class Segment(BaseModel):
     end: float = Field(description="Segment end time in seconds.")
 
 
-class JobStatus(BaseModel):
-    """Combined view of GET /transcription_jobs/{id} outcomes.
-
-    ``processing`` is an SDK-level synthesis of the server's HTTP 202 response.
-    ``done`` carries ``transcription``; ``error`` carries ``error_message``.
-    ``segments`` is populated only when the POST set ``with_timestamps=True``.
-    """
-
-    state: JobState
-    transcription: str | None = None
-    error_message: str | None = None
-    segments: list[Segment] | None = None
-
-
 class TranscriptResult(BaseModel):
-    """Final result returned from the high-level ``transcribe`` helper."""
+    """Final result returned from ``transcribe`` / the streaming helpers.
+
+    ``metadata`` carries any extra fields the server returned alongside the
+    text (e.g. ``audio_duration_secs`` from ``POST /v1/speech-to-text``).
+    """
 
     model_config = ConfigDict(extra="allow")
 
     text: str
-    job_id: str | None = None
-    segments: list[Segment] | None = Field(
-        default=None,
-        description="Populated only when transcribe(..., with_timestamps=True).",
-    )
+    segments: list[Segment] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 

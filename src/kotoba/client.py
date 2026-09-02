@@ -98,8 +98,9 @@ class KotobaClient:
         api_key: API key. Falls back to the provider's env vars —
             ``KOTOBA_API_KEY``, with ``FAL_KEY`` checked first on the
             ``fal`` provider.
-        url: REST API base URL (e.g. ``https://.../v1``). Falls back to
-            ``KOTOBA_ASR_REST_URL``.
+        url: REST API base URL — the server root; ``transcribe()`` posts to
+            ``/v1/speech-to-text`` beneath it (a base already ending in
+            ``/v1`` is tolerated). Falls back to ``KOTOBA_ASR_REST_URL``.
         asr_ws_url: WebSocket URL for live ASR. Falls back to
             ``KOTOBA_ASR_URL``.
         tts_ja_ws_url: WebSocket URL for Japanese TTS. Falls back to
