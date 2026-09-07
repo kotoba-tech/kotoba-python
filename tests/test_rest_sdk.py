@@ -8,10 +8,9 @@ from __future__ import annotations
 
 from io import BytesIO
 
+import kotoba
 import pytest
 import responses
-
-import kotoba
 from kotoba.errors import (
     AuthError,
     JobNotFoundError,
@@ -67,6 +66,36 @@ def test_submit_job_sends_with_timestamps(fake_wav):
     # Multipart body contains the form fields as plain bytes.
     assert b"with_timestamps" in body
     assert b"true" in body
+
+
+@responses.activate
+def test_submit_job_sends_kana(fake_wav):
+    responses.add(
+        responses.POST,
+        JOBS_URL,
+        json={"job_id": "kana-1"},
+        status=202,
+    )
+    _client().asr.submit_job(
+        fake_wav, language="ja", style_preference={"human_name": "kana"}
+    )
+    body = responses.calls[0].request.body
+    # style_preference maps to the server's flat `human_name=kana` form field.
+    assert b'name="human_name"\r\n\r\nkana\r\n' in body
+
+
+@responses.activate
+def test_submit_job_omits_kana_by_default(fake_wav):
+    responses.add(
+        responses.POST,
+        JOBS_URL,
+        json={"job_id": "no-kana"},
+        status=202,
+    )
+    _client().asr.submit_job(fake_wav, language="ja")
+    body = responses.calls[0].request.body
+    # No style field is sent when kana is not requested (server defaults to "default").
+    assert b"human_name" not in body
 
 
 @responses.activate
@@ -265,3 +294,22 @@ def test_client_url_from_env(monkeypatch):
     monkeypatch.setenv("KOTOBA_ASR_REST_URL", BASE_URL)
     client = kotoba.KotobaClient(api_key="x")
     assert client.url == BASE_URL
+
+
+# ---------- fal.run endpoints: auth scheme + key source --------------------
+
+FAL_BASE_URL = "https://fal.run/team/app"
+
+
+@responses.activate
+def test_fal_url_uses_key_auth_scheme(fake_wav):
+    responses.add(
+        responses.POST,
+        f"{FAL_BASE_URL}/transcription_jobs",
+        json={"job_id": "fal-1"},
+        status=202,
+    )
+    client = kotoba.KotobaClient(api_key="fal-secret", url=FAL_BASE_URL, max_retries=0)
+    client.asr.submit_job(fake_wav, language="ja")
+    assert responses.calls[0].request.headers["Authorization"] == "Key fal-secret"
+

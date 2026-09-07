@@ -27,6 +27,21 @@ def _resolve_url(url: str | None, language: str) -> str:
     return endpoint_for("tts", None, language)
 
 
+def _content_type_for(sample_rate: int, audio_format: str) -> str:
+    """MIME type for a negotiated TTS output format.
+
+    mu-law (Twilio) is served as ``audio/basic`` and Opus as ``audio/ogg``;
+    PCM formats keep the rate/encoding-tagged ``audio/pcm`` form.
+    """
+
+    fmt = audio_format.lower()
+    if fmt in ("mulaw", "ulaw", "twilio"):
+        return "audio/basic"
+    if fmt == "opus":
+        return "audio/ogg"
+    return f"audio/pcm;rate={sample_rate};encoding={audio_format}"
+
+
 class TTSClient:
     """Sync TTS client."""
 
@@ -39,6 +54,8 @@ class TTSClient:
         language: str = "ja",
         speaker_id: str | None = None,
         spk_ref_audio_tokens: Any = None,
+        audio_format: str | None = None,
+        sample_rate: int | None = None,
         url: str | None = None,
     ) -> TTSSession:
         return TTSSession(
@@ -46,6 +63,8 @@ class TTSClient:
             language=language,
             speaker_id=speaker_id,
             spk_ref_audio_tokens=spk_ref_audio_tokens,
+            audio_format=audio_format,
+            sample_rate=sample_rate,
             api_key=self._api_key,
         )
 
@@ -56,6 +75,8 @@ class TTSClient:
         language: str = "ja",
         speaker_id: str | None = None,
         spk_ref_audio_tokens: Any = None,
+        audio_format: str | None = None,
+        sample_rate: int | None = None,
         url: str | None = None,
     ) -> Iterator[bytes]:
         """Yield PCM audio chunks for ``text`` as the server emits them."""
@@ -64,6 +85,8 @@ class TTSClient:
             language=language,
             speaker_id=speaker_id,
             spk_ref_audio_tokens=spk_ref_audio_tokens,
+            audio_format=audio_format,
+            sample_rate=sample_rate,
             url=url,
         )
         with session:
@@ -80,16 +103,24 @@ class TTSClient:
         *,
         language: str = "ja",
         speaker_id: str | None = None,
+        audio_format: str | None = None,
+        sample_rate: int | None = None,
         url: str | None = None,
     ) -> AudioResult:
         chunks: list[bytes] = []
-        sample_rate = 24000
-        audio_format = "pcm_f32"
-        session = self.stream(language=language, speaker_id=speaker_id, url=url)
+        negotiated_rate = 24000
+        negotiated_format = "pcm_f32"
+        session = self.stream(
+            language=language,
+            speaker_id=speaker_id,
+            audio_format=audio_format,
+            sample_rate=sample_rate,
+            url=url,
+        )
         with session:
             session.synthesize(text)
-            sample_rate = session.sample_rate
-            audio_format = session.audio_format  # type: ignore[assignment]
+            negotiated_rate = session.sample_rate
+            negotiated_format = session.audio_format
             for event in session:
                 if event.type == "audio_chunk" and event.audio:
                     chunks.append(event.audio)
@@ -97,9 +128,9 @@ class TTSClient:
                     break
         return AudioResult(
             data=b"".join(chunks),
-            sample_rate=sample_rate,
-            audio_format=audio_format,  # type: ignore[arg-type]
-            content_type=f"audio/pcm;rate={sample_rate};encoding={audio_format}",
+            sample_rate=negotiated_rate,
+            audio_format=negotiated_format,
+            content_type=_content_type_for(negotiated_rate, negotiated_format),
         )
 
 
@@ -115,6 +146,8 @@ class AsyncTTSClient:
         language: str = "ja",
         speaker_id: str | None = None,
         spk_ref_audio_tokens: Any = None,
+        audio_format: str | None = None,
+        sample_rate: int | None = None,
         url: str | None = None,
     ) -> AsyncTTSSession:
         return AsyncTTSSession(
@@ -122,6 +155,8 @@ class AsyncTTSClient:
             language=language,
             speaker_id=speaker_id,
             spk_ref_audio_tokens=spk_ref_audio_tokens,
+            audio_format=audio_format,
+            sample_rate=sample_rate,
             api_key=self._api_key,
         )
 
@@ -132,6 +167,8 @@ class AsyncTTSClient:
         language: str = "ja",
         speaker_id: str | None = None,
         spk_ref_audio_tokens: Any = None,
+        audio_format: str | None = None,
+        sample_rate: int | None = None,
         url: str | None = None,
     ) -> AsyncIterator[bytes]:
         """Yield PCM audio chunks for ``text`` as the server emits them."""
@@ -140,6 +177,8 @@ class AsyncTTSClient:
             language=language,
             speaker_id=speaker_id,
             spk_ref_audio_tokens=spk_ref_audio_tokens,
+            audio_format=audio_format,
+            sample_rate=sample_rate,
             url=url,
         ) as session:
             await session.synthesize(text)
@@ -155,15 +194,23 @@ class AsyncTTSClient:
         *,
         language: str = "ja",
         speaker_id: str | None = None,
+        audio_format: str | None = None,
+        sample_rate: int | None = None,
         url: str | None = None,
     ) -> AudioResult:
         chunks: list[bytes] = []
-        sample_rate = 24000
-        audio_format = "pcm_f32"
-        async with self.stream(language=language, speaker_id=speaker_id, url=url) as session:
+        negotiated_rate = 24000
+        negotiated_format = "pcm_f32"
+        async with self.stream(
+            language=language,
+            speaker_id=speaker_id,
+            audio_format=audio_format,
+            sample_rate=sample_rate,
+            url=url,
+        ) as session:
             await session.synthesize(text)
-            sample_rate = session.sample_rate
-            audio_format = session.audio_format
+            negotiated_rate = session.sample_rate
+            negotiated_format = session.audio_format
             async for event in session:
                 if event.type == "audio_chunk" and event.audio:
                     chunks.append(event.audio)
@@ -171,7 +218,7 @@ class AsyncTTSClient:
                     break
         return AudioResult(
             data=b"".join(chunks),
-            sample_rate=sample_rate,
-            audio_format=audio_format,  # type: ignore[arg-type]
-            content_type=f"audio/pcm;rate={sample_rate};encoding={audio_format}",
+            sample_rate=negotiated_rate,
+            audio_format=negotiated_format,
+            content_type=_content_type_for(negotiated_rate, negotiated_format),
         )

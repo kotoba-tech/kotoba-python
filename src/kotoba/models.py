@@ -3,11 +3,56 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Literal
+from typing import Any, Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field
 
-AudioFormat = Literal["pcm16", "pcm_f32"]
+# Accepts every wire name the TTS server echoes back in ``session.created``
+# (see kotoba_sdk_gpu ``_OUTPUT_FORMAT_ALIASES``): a narrower Literal would make
+# a negotiated response such as ``format="twilio"`` fail pydantic validation.
+AudioFormat = Literal[
+    "pcm16",
+    "pcm_16",
+    "pcm_s16le",
+    "pcm_f32",
+    "pcm_f32le",
+    "float32",
+    "mulaw",
+    "ulaw",
+    "twilio",
+    "opus",
+]
+
+
+class TranscriptionStylePreference(BaseModel):
+    """ASR transcription style preference.
+
+    Mirrors the server's
+    ``session.input_audio_transcription.style_preference`` shape.
+    ``human_name="kana"`` transcribes personal names in katakana; ``None``
+    (the default) lets the server decide.
+    """
+
+    human_name: Literal["kana"] | None = None
+
+    def to_wire(self) -> dict[str, str]:
+        """Flat field map shared by the WS and REST transports.
+
+        Returns ``{}`` when no preference is set, so callers can merge it
+        unconditionally.
+        """
+
+        return self.model_dump(exclude_none=True)
+
+    @classmethod
+    def coerce(
+        cls, value: TranscriptionStylePreference | Mapping[str, Any] | None
+    ) -> TranscriptionStylePreference | None:
+        """Accept the JSON-shaped dict users naturally pass alongside the model."""
+        if value is None or isinstance(value, cls):
+            return value
+        return cls.model_validate(value)
+
 
 StreamEventType = Literal[
     "session_ready",

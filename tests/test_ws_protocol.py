@@ -12,14 +12,109 @@ import asyncio
 import base64
 import json
 import struct
+import time
+from http import HTTPStatus
 from typing import AsyncIterator
 
 import pytest
 import websockets
-
+from kotoba._ws_asr import AsyncASRSession
 from kotoba._ws_s2st import AsyncS2STSession, S2STSession
 from kotoba._ws_tts import AsyncTTSSession, TTSSession
-from kotoba.tts import AsyncTTSClient, TTSClient
+from kotoba.errors import AuthError, ProtocolError
+from kotoba.tts import AsyncTTSClient, TTSClient, _content_type_for
+
+
+# The server reads the kana preference from
+# input_audio_transcription.style_preference; a flat `kana` key is ignored.
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("style_preference", "expected"),
+    [(None, None), ({"human_name": "kana"}, {"human_name": "kana"})],
+)
+async def test_asr_handshake_style_preference(style_preference, expected):
+    session = AsyncASRSession(
+        "ws://unused", language="ja", style_preference=style_preference
+    )
+    sent: list[dict] = []
+
+    async def _send(payload: dict) -> None:
+        sent.append(payload)
+        session._session_ready.set()
+
+    session._send_json = _send  # type: ignore[method-assign]
+    await session._handshake()
+    transcription = sent[0]["session"]["input_audio_transcription"]
+    assert transcription.get("style_preference") == expected
+    assert "kana" not in transcription
+
+
+async def _capture_tts_open(**kwargs) -> dict:
+    session = AsyncTTSSession("ws://unused", language="ja", speaker_id="s", **kwargs)
+    sent: list[dict] = []
+
+    async def _send(payload: dict) -> None:
+        sent.append(payload)
+        session._session_ready.set()
+
+    session._send_json = _send  # type: ignore[method-assign]
+    await session._handshake()
+    return sent[0]
+
+
+@pytest.mark.asyncio
+async def test_tts_handshake_omits_format_when_unset():
+    open_frame = await _capture_tts_open()
+    assert "format" not in open_frame
+    assert "sample_rate" not in open_frame
+
+
+@pytest.mark.asyncio
+async def test_tts_handshake_sends_negotiated_format():
+    open_frame = await _capture_tts_open(audio_format="mulaw", sample_rate=8000)
+    assert open_frame["format"] == "mulaw"
+    assert open_frame["sample_rate"] == 8000
+
+
+@pytest.mark.asyncio
+async def test_tts_handshake_partial_negotiation():
+    open_frame = await _capture_tts_open(audio_format="pcm16")
+    assert open_frame["format"] == "pcm16"
+    assert "sample_rate" not in open_frame
+
+
+@pytest.mark.asyncio
+async def test_tts_session_created_lowercases_audio_format():
+    """The wire format is negotiated case-insensitively; an older server (or
+    a proxy) that still echoes the client's raw casing must not leak an
+    upper-case string into audio_format, which mirrors the AudioFormat
+    Literal's lower-case-only spelling."""
+    session = AsyncTTSSession("ws://unused", language="ja", speaker_id="s")
+    await session._handle_text_frame(
+        {
+            "type": "session.created",
+            "format": "PCM_F32",
+            "sample_rate": 24000,
+            "client_id": "fake-client-1",
+        }
+    )
+    assert session.audio_format == "pcm_f32"
+
+
+@pytest.mark.parametrize(
+    ("audio_format", "expected"),
+    [
+        ("pcm_f32", "audio/pcm;rate=24000;encoding=pcm_f32"),
+        ("pcm16", "audio/pcm;rate=8000;encoding=pcm16"),
+        ("mulaw", "audio/basic"),
+        ("ulaw", "audio/basic"),
+        ("twilio", "audio/basic"),
+        ("opus", "audio/ogg"),
+    ],
+)
+def test_content_type_for(audio_format, expected):
+    rate = 8000 if audio_format == "pcm16" else 24000
+    assert _content_type_for(rate, audio_format) == expected
 
 
 # ---------- TTS fake server -----------------------------------------------
@@ -163,13 +258,13 @@ import threading
 from typing import Iterator
 
 
-def _serve_in_thread(handler) -> tuple[str, callable]:
+def _serve_in_thread(handler, **serve_kwargs) -> tuple[str, callable]:
     loop = asyncio.new_event_loop()
     started = threading.Event()
     state: dict = {}
 
     async def _main():
-        server = await websockets.serve(handler, "127.0.0.1", 0)
+        server = await websockets.serve(handler, "127.0.0.1", 0, **serve_kwargs)
         host, port = server.sockets[0].getsockname()[:2]
         state["url"] = f"ws://{host}:{port}"
         state["server"] = server
@@ -343,3 +438,95 @@ def test_s2st_sync_streaming(s2st_server_url):
             if event.type == "done":
                 break
     assert "".join(transcripts) == "hello world"
+
+
+# ---------- session-init failure surfacing ---------------------------------
+#
+# A server (or the fal gateway) can answer session init with an error frame
+# and close. That must raise the real error immediately, not a generic
+# TimeoutError once handshake_timeout expires.
+
+
+def _rejecting_tts_server(frame: dict, counters: dict):
+    async def handler(websocket):
+        counters["connections"] = counters.get("connections", 0) + 1
+        await websocket.recv()  # the client's open frame
+        await websocket.send(json.dumps(frame))
+        await websocket.close()
+
+    return handler
+
+
+_CAPACITY_ERROR = {"type": "error", "code": "capacity", "message": "No available batch slot"}
+
+
+async def test_error_frame_during_session_init_surfaces_promptly():
+    counters: dict = {}
+    url, stop = _serve_in_thread(_rejecting_tts_server(_CAPACITY_ERROR, counters))
+    try:
+        started = time.monotonic()
+        with pytest.raises(ProtocolError, match="batch slot"):
+            async with AsyncTTSSession(url, language="ja", speaker_id="ja-man-1"):
+                pass
+        assert time.monotonic() - started < 5.0  # not the 15s handshake timeout
+        assert counters["connections"] == 1
+    finally:
+        stop()
+
+
+def test_error_frame_during_session_init_surfaces_promptly_sync():
+    counters: dict = {}
+    url, stop = _serve_in_thread(_rejecting_tts_server(_CAPACITY_ERROR, counters))
+    try:
+        started = time.monotonic()
+        with pytest.raises(ProtocolError, match="batch slot"):
+            with TTSSession(url, language="ja", speaker_id="ja-man-1"):
+                pass
+        assert time.monotonic() - started < 5.0
+    finally:
+        stop()
+
+
+async def test_x_fal_error_frame_surfaces_as_protocol_error():
+    frame = {"type": "x-fal-error", "message": "No available batch slot"}
+    url, stop = _serve_in_thread(_rejecting_tts_server(frame, {}))
+    try:
+        with pytest.raises(ProtocolError, match="Fal platform error"):
+            async with AsyncTTSSession(url, language="ja", speaker_id="ja-man-1"):
+                pass
+    finally:
+        stop()
+
+
+async def test_ws_auth_reject_raises_auth_error():
+    def reject(connection, request):
+        return connection.respond(HTTPStatus.UNAUTHORIZED, "Unauthorized")
+
+    url, stop = _serve_in_thread(_fake_tts_server, process_request=reject)
+    try:
+        with pytest.raises(AuthError):
+            async with AsyncTTSSession(url, language="ja", speaker_id="ja-man-1"):
+                pass
+    finally:
+        stop()
+
+
+async def test_ws_sends_bearer_auth_for_non_fal_host():
+    seen: dict = {}
+
+    def capture(connection, request):
+        seen["authorization"] = request.headers.get("Authorization")
+
+    url, stop = _serve_in_thread(_fake_tts_server, process_request=capture)
+    try:
+        async with AsyncTTSSession(
+            url, language="ja", speaker_id="ja-man-1", api_key="secret"
+        ) as session:
+            await session.cancel()
+            async for event in session:
+                if event.type == "done":
+                    break
+        # A local ws:// host is not fal.run, so the scheme is Bearer.
+        assert seen["authorization"] == "Bearer secret"
+    finally:
+        stop()

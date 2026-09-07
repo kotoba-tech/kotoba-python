@@ -43,6 +43,8 @@ result.to_wav("hello.wav")
 
 Open `hello.wav` in any audio player. Done.
 
+Need a specific wire format? Pass `audio_format=` (and, for PCM, `sample_rate=` — one of 8000 / 16000 / 24000). For example, `client.tts.synthesize("...", language="ja", audio_format="mulaw")` returns 8 kHz G.711 mu-law, the format Twilio's Media Streams expect; `result.to_wav()` still writes a playable WAV. `audio_format="opus"` returns a self-contained 24 kHz Ogg/Opus stream — write `result.data` straight to a `.ogg` file (it is not WAV-convertible).
+
 ## 4. Streaming TTS (incremental playback)
 
 The streaming API yields audio chunks as the server produces them, so you can play (or send to a speaker / WebRTC track) without waiting for the full response.
@@ -137,4 +139,4 @@ For incremental transcripts and audio out (e.g. live captioning), use `client.s2
   ```
 
 - WebSocket ASR accepts PCM16 LE mono audio. `client.asr.transcribe(path)` (REST) decodes any `soundfile`-readable format; for `stream(...)` the caller is responsible for providing raw PCM16 bytes.
-- TTS audio is emitted as `pcm_f32` @ 24 kHz mono; `result.to_wav()` converts to a playable int16 WAV automatically.
+- TTS audio defaults to `pcm_f32` @ 24 kHz mono; `result.to_wav()` converts to a playable int16 WAV automatically. Negotiate other formats with `audio_format=` — `pcm16` / `float32` (`sample_rate` 8/16/24 kHz), `mulaw` (8 kHz G.711, WAV-convertible), or `opus` (24 kHz Ogg/Opus, save the raw bytes).

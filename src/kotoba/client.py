@@ -78,7 +78,9 @@ class KotobaClient:
     """Entry point for REST + WebSocket access to Kotoba speech APIs.
 
     Args:
-        api_key: Bearer token. Falls back to ``KOTOBA_API_KEY`` env var.
+        api_key: API key. Falls back to ``KOTOBA_API_KEY``. Sent as
+            ``Authorization: Bearer …``, or ``Authorization: Key …`` for
+            fal.run hosts.
         url: REST API base URL (e.g. ``https://.../v1``). Falls back to
             ``KOTOBA_ASR_REST_URL``.
         asr_ws_url: WebSocket URL for live ASR. Falls back to

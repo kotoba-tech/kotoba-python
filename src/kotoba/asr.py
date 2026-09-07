@@ -23,10 +23,15 @@ from typing import AsyncIterator, Iterator
 
 from kotoba._http import AsyncHttpSession, HttpSession
 from kotoba._pacing import apace, pace
-from kotoba._ws_asr import AsyncASRSession, ASRSession, AudioSource
+from kotoba._ws_asr import ASRSession, AsyncASRSession, AudioSource
 from kotoba.errors import JobNotFoundError, TimeoutError, TranscriptionError
-from kotoba.models import JobIDResponse, JobState, JobStatus, TranscriptResult
-
+from kotoba.models import (
+    JobIDResponse,
+    JobState,
+    JobStatus,
+    TranscriptionStylePreference,
+    TranscriptResult,
+)
 
 DEFAULT_TIMEOUT = 1200.0  # 20 min; REST poll deadline
 _WS_DEFAULT_SAMPLE_RATE = 24000
@@ -37,6 +42,25 @@ _WS_DEFAULT_CHUNK_S = _WS_DEFAULT_CHUNK_MS / 1000.0
 def _guess_content_type(path: Path) -> str:
     content_type, _ = mimetypes.guess_type(path.name)
     return content_type or "application/octet-stream"
+
+
+def _job_data(
+    language: str,
+    with_timestamps: bool,
+    style_preference: TranscriptionStylePreference | dict | None,
+) -> dict[str, str]:
+    """Build the transcription-job multipart form fields.
+
+    ``style_preference`` is flattened into individual form fields (multipart
+    can't carry nested objects); an unset preference contributes nothing, so
+    the server applies its own default.
+    """
+
+    style_preference = TranscriptionStylePreference.coerce(style_preference)
+    data = {"language": language, "with_timestamps": str(with_timestamps).lower()}
+    if style_preference is not None:
+        data.update(style_preference.to_wire())
+    return data
 
 
 def _resolve_ws_url(explicit: str | None) -> str:
@@ -84,20 +108,19 @@ class ASRClient:
         *,
         language: str = "ja",
         with_timestamps: bool = False,
+        style_preference: TranscriptionStylePreference | dict | None = None,
     ) -> JobIDResponse:
         """POST an audio file, return the server-assigned job_id."""
 
         self._require_http()
         path = Path(audio_file_path)
         content_type = _guess_content_type(path)
+        data = _job_data(language, with_timestamps, style_preference)
         with path.open("rb") as f:
             response = self._http.post(
                 "/transcription_jobs",
                 files={"file": (path.name, f, content_type)},
-                data={
-                    "language": language,
-                    "with_timestamps": str(with_timestamps).lower(),
-                },
+                data=data,
             )
         return JobIDResponse(**response.json())
 
@@ -123,6 +146,7 @@ class ASRClient:
         *,
         language: str = "ja",
         with_timestamps: bool = False,
+        style_preference: TranscriptionStylePreference | dict | None = None,
         poll_interval: float = 1.0,
         poll_backoff: float = 1.5,
         max_poll_interval: float = 10.0,
@@ -134,6 +158,7 @@ class ASRClient:
             audio_file_path,
             language=language,
             with_timestamps=with_timestamps,
+            style_preference=style_preference,
         )
         deadline = time.monotonic() + timeout
         interval = poll_interval
@@ -167,6 +192,7 @@ class ASRClient:
         language: str = "ja",
         sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
         keywords: list[str] | None = None,
+        style_preference: TranscriptionStylePreference | dict | None = None,
         url: str | None = None,
     ) -> ASRSession:
         """Open a streaming ASR session. Caller drives send_audio / commit."""
@@ -176,6 +202,7 @@ class ASRClient:
             language=language,
             sample_rate=sample_rate,
             keywords=keywords,
+            style_preference=style_preference,
             api_key=self._api_key,
         )
 
@@ -186,6 +213,7 @@ class ASRClient:
         language: str = "ja",
         sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
         keywords: list[str] | None = None,
+        style_preference: TranscriptionStylePreference | dict | None = None,
         url: str | None = None,
     ) -> TranscriptResult:
         """Internal helper; not part of the documented public API.
@@ -200,6 +228,7 @@ class ASRClient:
             language=language,
             sample_rate=sample_rate,
             keywords=keywords,
+            style_preference=style_preference,
             url=url,
         ) as session:
             for chunk in pace(
@@ -223,6 +252,7 @@ class ASRClient:
         language: str = "ja",
         sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
         keywords: list[str] | None = None,
+        style_preference: TranscriptionStylePreference | dict | None = None,
         url: str | None = None,
     ) -> Iterator[str]:
         """Yield transcript deltas for a streaming pcm16 source.
@@ -236,6 +266,7 @@ class ASRClient:
             language=language,
             sample_rate=sample_rate,
             keywords=keywords,
+            style_preference=style_preference,
             url=url,
         )
         with session:
@@ -290,18 +321,17 @@ class AsyncASRClient:
         *,
         language: str = "ja",
         with_timestamps: bool = False,
+        style_preference: TranscriptionStylePreference | dict | None = None,
     ) -> JobIDResponse:
         self._require_http()
         path = Path(audio_file_path)
         content_type = _guess_content_type(path)
         data_bytes = await asyncio.to_thread(path.read_bytes)
+        data = _job_data(language, with_timestamps, style_preference)
         response = await self._http.post(
             "/transcription_jobs",
             files={"file": (path.name, data_bytes, content_type)},
-            data={
-                "language": language,
-                "with_timestamps": str(with_timestamps).lower(),
-            },
+            data=data,
         )
         return JobIDResponse(**response.json())
 
@@ -325,6 +355,7 @@ class AsyncASRClient:
         *,
         language: str = "ja",
         with_timestamps: bool = False,
+        style_preference: TranscriptionStylePreference | dict | None = None,
         poll_interval: float = 1.0,
         poll_backoff: float = 1.5,
         max_poll_interval: float = 10.0,
@@ -336,6 +367,7 @@ class AsyncASRClient:
             audio_file_path,
             language=language,
             with_timestamps=with_timestamps,
+            style_preference=style_preference,
         )
         deadline = time.monotonic() + timeout
         interval = poll_interval
@@ -369,6 +401,7 @@ class AsyncASRClient:
         language: str = "ja",
         sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
         keywords: list[str] | None = None,
+        style_preference: TranscriptionStylePreference | dict | None = None,
         url: str | None = None,
     ) -> AsyncASRSession:
         return AsyncASRSession(
@@ -376,6 +409,7 @@ class AsyncASRClient:
             language=language,
             sample_rate=sample_rate,
             keywords=keywords,
+            style_preference=style_preference,
             api_key=self._api_key,
         )
 
@@ -386,6 +420,7 @@ class AsyncASRClient:
         language: str = "ja",
         sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
         keywords: list[str] | None = None,
+        style_preference: TranscriptionStylePreference | dict | None = None,
         url: str | None = None,
     ) -> TranscriptResult:
         """Internal helper; not part of the documented public API.
@@ -399,6 +434,7 @@ class AsyncASRClient:
             language=language,
             sample_rate=sample_rate,
             keywords=keywords,
+            style_preference=style_preference,
             url=url,
         ) as session:
             async for chunk in apace(
@@ -422,12 +458,14 @@ class AsyncASRClient:
         language: str = "ja",
         sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
         keywords: list[str] | None = None,
+        style_preference: TranscriptionStylePreference | dict | None = None,
         url: str | None = None,
     ) -> AsyncIterator[str]:
         async with self.stream(
             language=language,
             sample_rate=sample_rate,
             keywords=keywords,
+            style_preference=style_preference,
             url=url,
         ) as session:
             feeder = asyncio.create_task(session.feed(audio))

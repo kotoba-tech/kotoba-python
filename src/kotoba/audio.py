@@ -19,7 +19,18 @@ except ImportError:  # pragma: no cover - exercised by import-time fallback
     sf = None  # type: ignore[assignment]
 
 
-AudioFormat = Literal["pcm16", "pcm_f32"]
+AudioFormat = Literal[
+    "pcm16",
+    "pcm_16",
+    "pcm_s16le",
+    "pcm_f32",
+    "pcm_f32le",
+    "float32",
+    "mulaw",
+    "ulaw",
+    "twilio",
+    "opus",
+]
 
 
 def load_mono_pcm16_wav(path: str | Path) -> tuple[np.ndarray, int]:
@@ -126,6 +137,22 @@ def save_pcm_f32_as_wav(
     save_mono_pcm16_wav(path, pcm_f32_bytes_to_int16(buf), sample_rate)
 
 
+def mulaw_bytes_to_int16(buf: bytes) -> np.ndarray:
+    """Expand 8-bit G.711 mu-law bytes to int16 samples.
+
+    Vectorised inverse of the standard mu-law encoding (bit-exact with
+    ``audioop.ulaw2lin(buf, 2)``). WHY NOT ``audioop``: it was removed in
+    Python 3.13 and the SDK supports >=3.10, so the codec must be pure numpy.
+    """
+
+    u = ~np.frombuffer(buf, dtype=np.uint8)
+    sign = u & 0x80
+    exponent = (u >> 4) & 0x07
+    mantissa = u & 0x0F
+    magnitude = (((mantissa.astype(np.int32) << 3) + 0x84) << exponent) - 0x84
+    return np.where(sign, -magnitude, magnitude).astype("<i2")
+
+
 def save_audio_as_wav(
     path: str | Path,
     buf: bytes,
@@ -134,10 +161,10 @@ def save_audio_as_wav(
 ) -> None:
     """Format-aware WAV writer used by the result models' `to_wav()` helpers."""
 
-    if audio_format == "pcm_f32":
+    if audio_format in ("pcm_f32", "pcm_f32le", "float32"):
         save_pcm_f32_as_wav(path, buf, sample_rate)
         return
-    if audio_format == "pcm16":
+    if audio_format in ("pcm16", "pcm_16", "pcm_s16le"):
         if len(buf) % 2 != 0:
             raise ValueError(
                 f"pcm16 buffer length {len(buf)} is not aligned to int16"
@@ -145,4 +172,12 @@ def save_audio_as_wav(
         samples = np.frombuffer(buf, dtype="<i2").copy()
         save_mono_pcm16_wav(path, samples, sample_rate)
         return
+    if audio_format in ("mulaw", "ulaw", "twilio"):
+        save_mono_pcm16_wav(path, mulaw_bytes_to_int16(buf), sample_rate)
+        return
+    if audio_format == "opus":
+        raise ValueError(
+            "opus audio is a self-contained Ogg container; write the raw bytes "
+            "to a .ogg/.opus file instead of converting to WAV"
+        )
     raise ValueError(f"unsupported audio_format: {audio_format!r}")

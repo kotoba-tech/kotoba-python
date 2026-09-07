@@ -29,7 +29,8 @@ from typing import Any, AsyncIterator, Iterator
 import websockets
 import websockets.exceptions
 
-from kotoba.errors import APIError, AuthError, ProtocolError, TimeoutError
+from kotoba._auth import auth_headers
+from kotoba.errors import APIError, AuthError, KotobaError, ProtocolError, TimeoutError
 from kotoba.models import StreamEvent
 
 _DONE_SENTINEL: StreamEvent | None = None  # `None` is the "no more events" marker
@@ -70,9 +71,7 @@ class AsyncSession:
     async def start(self) -> None:
         if self._ws is not None:
             return
-        headers: dict[str, str] = {}
-        if self._api_key:
-            headers["Authorization"] = f"Bearer {self._api_key}"
+        headers = auth_headers(self._api_key, self._url)
 
         connect_kwargs: dict[str, Any] = {
             "additional_headers": headers,
@@ -95,13 +94,42 @@ class AsyncSession:
             raise APIError(f"Could not reach {self._url}: {exc}") from exc
 
         self._receiver_task = asyncio.create_task(self._receiver_loop())
-        try:
-            await asyncio.wait_for(self._handshake(), timeout=self.handshake_timeout)
-        except asyncio.TimeoutError as exc:
+        # Race the handshake against the receiver: a server that answers
+        # session init with an error frame (or just closes) must surface
+        # that error now, not a generic timeout handshake_timeout later.
+        handshake_task = asyncio.create_task(self._handshake())
+        done, _pending = await asyncio.wait(
+            {handshake_task, self._receiver_task},
+            timeout=self.handshake_timeout,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        if handshake_task in done:
+            exc = handshake_task.exception()
+            if exc is None:
+                return
+            await self.close()
+            if isinstance(exc, KotobaError):
+                raise exc
+            raise APIError(f"Session handshake failed: {exc!r}") from exc
+
+        handshake_task.cancel()
+        with suppress(asyncio.CancelledError, Exception):
+            await handshake_task
+
+        if not done:
             await self.close()
             raise TimeoutError(
                 f"Timed out waiting for session handshake after {self.handshake_timeout}s"
-            ) from exc
+            )
+
+        # Receiver finished before the handshake: the server rejected the
+        # session (error frame -> self._error) or dropped the connection.
+        error = self._error
+        await self.close()
+        if error is not None:
+            raise error
+        raise APIError("Connection closed during session init")
 
     async def close(self) -> None:
         if self._closed:
@@ -171,6 +199,15 @@ class AsyncSession:
                 except json.JSONDecodeError:
                     continue
                 try:
+                    if payload.get("type") == "x-fal-error":
+                        # Platform-level error frame from the fal gateway —
+                        # same treatment as a server `error` frame, handled
+                        # here so every modality benefits.
+                        raise ProtocolError(
+                            f"Fal platform error: {payload.get('message', payload)}",
+                            code=str(payload.get("code", "x-fal-error")),
+                            payload=payload,
+                        )
                     await self._handle_text_frame(payload)
                 except ProtocolError as exc:
                     self._error = exc

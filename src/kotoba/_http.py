@@ -11,6 +11,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from kotoba._auth import auth_headers
 from kotoba.errors import (
     APIError,
     AuthError,
@@ -54,8 +55,7 @@ class HttpSession:
         adapter = HTTPAdapter(max_retries=retry)
         session.mount("http://", adapter)
         session.mount("https://", adapter)
-        if api_key:
-            session.headers["Authorization"] = f"Bearer {api_key}"
+        session.headers.update(auth_headers(api_key, self.base_url))
         self._session = session
 
     def post(self, path: str, **kwargs: Any) -> requests.Response:
@@ -176,7 +176,7 @@ class AsyncHttpSession:
         self._backoff_factor = backoff_factor
         self._max_backoff = max_backoff
 
-        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        headers = auth_headers(api_key, self.base_url)
         self._client = httpx.AsyncClient(
             base_url=self.base_url,
             timeout=timeout,

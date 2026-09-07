@@ -23,7 +23,7 @@ from typing import Any, AsyncIterable, Iterable, Union
 
 from kotoba._ws_base import AsyncSession, SyncSession
 from kotoba.errors import APIError, ProtocolError
-from kotoba.models import StreamEvent
+from kotoba.models import StreamEvent, TranscriptionStylePreference
 
 AudioSource = Union[Iterable[bytes], AsyncIterable[bytes]]
 _FEED_STOP = object()
@@ -51,12 +51,14 @@ class AsyncASRSession(AsyncSession):
         language: str,
         sample_rate: int = 24000,
         keywords: list[str] | None = None,
+        style_preference: TranscriptionStylePreference | dict | None = None,
         api_key: str | None = None,
     ) -> None:
         super().__init__(url, api_key=api_key)
         self._language = language
         self._sample_rate = sample_rate
         self._keywords = keywords
+        self._style_preference = TranscriptionStylePreference.coerce(style_preference)
         self._session_ready = asyncio.Event()
         self._event_counter = 0
 
@@ -78,6 +80,10 @@ class AsyncASRSession(AsyncSession):
         }
         if self._keywords:
             update["session"]["input_audio_transcription"]["keywords"] = self._keywords
+        if self._style_preference is not None:
+            style = self._style_preference.to_wire()
+            if style:
+                update["session"]["input_audio_transcription"]["style_preference"] = style
         await self._send_json(update)
         await self._session_ready.wait()
 
@@ -193,6 +199,7 @@ class ASRSession(SyncSession):
         language: str,
         sample_rate: int = 24000,
         keywords: list[str] | None = None,
+        style_preference: TranscriptionStylePreference | dict | None = None,
         api_key: str | None = None,
     ) -> None:
         super().__init__(
@@ -201,6 +208,7 @@ class ASRSession(SyncSession):
                 language=language,
                 sample_rate=sample_rate,
                 keywords=keywords,
+                style_preference=style_preference,
                 api_key=api_key,
             )
         )

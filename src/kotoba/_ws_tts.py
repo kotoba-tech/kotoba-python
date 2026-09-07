@@ -60,6 +60,8 @@ class AsyncTTSSession(AsyncSession):
         language: str,
         speaker_id: str | None = None,
         spk_ref_audio_tokens: Any = None,
+        audio_format: str | None = None,
+        sample_rate: int | None = None,
         api_key: str | None = None,
     ) -> None:
         super().__init__(url, api_key=api_key)
@@ -71,9 +73,11 @@ class AsyncTTSSession(AsyncSession):
                 f"pass speaker_id= explicitly."
             )
         self._spk_ref = spk_ref_audio_tokens
+        self._req_audio_format = audio_format
+        self._req_sample_rate = sample_rate
         self._session_ready = asyncio.Event()
 
-        # Populated from session.created.
+        # Negotiated result echoed back by session.created (not the request).
         self.sample_rate: int = 24000
         self.audio_format: str = "pcm_f32"
         self.client_id: str | None = None
@@ -88,6 +92,12 @@ class AsyncTTSSession(AsyncSession):
         }
         if self._spk_ref is not None:
             open_frame["spk_ref_audio_tokens"] = self._spk_ref
+        # Omit the keys entirely when unset so the frame is byte-identical to the
+        # pre-negotiation client: the server defaults to pcm_f32 @ 24 kHz.
+        if self._req_audio_format is not None:
+            open_frame["format"] = self._req_audio_format
+        if self._req_sample_rate is not None:
+            open_frame["sample_rate"] = self._req_sample_rate
         await self._send_json(open_frame)
         await self._session_ready.wait()
 
@@ -126,7 +136,9 @@ class AsyncTTSSession(AsyncSession):
 
         if msg_type == "session.created":
             self.sample_rate = int(payload.get("sample_rate", self.sample_rate))
-            self.audio_format = str(payload.get("format", self.audio_format))
+            # lower-case defensively: an older server echoing the client's raw
+            # casing must not break the lower-case-only AudioFormat Literal
+            self.audio_format = str(payload.get("format", self.audio_format)).lower()
             self.client_id = payload.get("client_id")
             self._session_ready.set()
             await self._emit(StreamEvent(type="session_ready", metadata=payload))
@@ -197,6 +209,8 @@ class TTSSession(SyncSession):
         language: str,
         speaker_id: str | None = None,
         spk_ref_audio_tokens: Any = None,
+        audio_format: str | None = None,
+        sample_rate: int | None = None,
         api_key: str | None = None,
     ) -> None:
         super().__init__(
@@ -205,6 +219,8 @@ class TTSSession(SyncSession):
                 language=language,
                 speaker_id=speaker_id,
                 spk_ref_audio_tokens=spk_ref_audio_tokens,
+                audio_format=audio_format,
+                sample_rate=sample_rate,
                 api_key=api_key,
             )
         )
