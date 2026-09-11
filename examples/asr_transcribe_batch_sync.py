@@ -1,12 +1,16 @@
-"""Sync REST ASR example.
+"""Sync REST ASR example: the job API, ``transcribe(..., batch=True)``.
+
+Self-hosted ``streaming_stt`` deployments only (not available on fal; there use
+``transcribe()`` without ``batch``, see ``asr_transcribe_sync.py``).
 
 Submit an audio file via POST + poll, print the transcript and
-per-segment timestamps. REST is the default transport for batch ASR.
+per-segment timestamps. The job API is served by self-hosted ``streaming_stt`` deployments only;
+on fal it is not supported, use ``asr_transcribe_sync.py`` there.
 
 Usage:
     export KOTOBA_API_KEY=...
     export KOTOBA_ASR_REST_URL=https://.../v1
-    uv run examples/asr_rest_sync.py [path/to/clip.mp3]
+    uv run examples/asr_transcribe_batch_sync.py [path/to/clip.mp3]
 """
 
 from __future__ import annotations
@@ -22,7 +26,7 @@ DEFAULT_AUDIO = Path(__file__).parent / "audio" / "ja" / "example.mp3"
 def main(input_audio: str, language: str) -> None:
     client = kotoba.KotobaClient()
     result = client.asr.transcribe(
-        input_audio, language=language, with_timestamps=True
+        input_audio, batch=True, language=language, with_timestamps=True
     )
     print(result.text)
     for seg in result.segments or []:

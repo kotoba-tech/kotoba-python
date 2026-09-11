@@ -20,14 +20,21 @@ from kotoba.errors import (
 )
 
 _RETRY_STATUS = (429, 500, 502, 503, 504)
+# Only idempotent methods are re-sent. A POST that timed out may already have
+# been accepted (an upload transcribed and billed), so it is never retried.
+_RETRY_METHODS = frozenset({"GET"})
 
 
 class HttpSession:
     """Thin wrapper around ``requests.Session`` with auth + retry preset.
 
-    Retries network errors and idempotent 5xx/429 responses with exponential
-    backoff. Callers that need to interpret non-error statuses (e.g. 202 for
-    "still processing", 404 for "not found") pass ``allow_statuses``.
+    Retries GET requests on network errors, 429 and 5xx with exponential
+    backoff; a POST is sent exactly once (``_RETRY_METHODS``). Redirects are
+    never followed: the session carries credentials, and ``requests`` keeps
+    the ``Authorization`` header across hosts, so a 3xx raises
+    ``APIError`` instead. Callers that need to interpret non-error statuses
+    (e.g. 202 for "still processing", 404 for "not found") pass
+    ``allow_statuses``.
     """
 
     def __init__(
@@ -47,8 +54,7 @@ class HttpSession:
             total=max_retries,
             backoff_factor=backoff_factor,
             status_forcelist=(429, 500, 502, 503, 504),
-            # "POST" is non-idempotent, so we don't retry on POST.
-            allowed_methods=frozenset({"GET"}),
+            allowed_methods=_RETRY_METHODS,
             raise_on_status=False,
             respect_retry_after_header=True,
         )
@@ -74,6 +80,7 @@ class HttpSession:
     ) -> requests.Response:
         url = f"{self.base_url}{path}"
         kwargs.setdefault("timeout", self.timeout)
+        kwargs.setdefault("allow_redirects", False)  # see the class docstring
         try:
             response = self._session.request(method, url, **kwargs)
         except requests.exceptions.Timeout as e:
@@ -86,7 +93,7 @@ class HttpSession:
         if response.status_code in allow_statuses:
             return response
 
-        if response.status_code < 400:
+        if response.status_code < 300:
             return response
 
         self._raise_for_status(response)
@@ -107,8 +114,29 @@ def _safe_json(response: "requests.Response | httpx.Response") -> dict:
     return value
 
 
+def decode_json(response: "requests.Response | httpx.Response") -> Any:
+    """Body of a successful response as JSON; a non-JSON body is a protocol failure.
+
+    Both requests and httpx raise a ``ValueError`` subclass on a bad body.
+    """
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise ProtocolError(
+            f"Non-JSON response body from {response.url}",
+            status_code=response.status_code,
+            payload={"detail": response.text[:512]},
+        ) from exc
+
+
 def _raise_for_status(status: int, payload: dict, url: str) -> None:
     message = _extract_message(payload) or f"HTTP {status} from {url}"
+    if 300 <= status < 400:
+        raise APIError(
+            f"Unexpected redirect ({status}) from {url}; the SDK does not follow redirects",
+            status_code=status,
+            payload=payload,
+        )
     if status in (401, 403):
         raise AuthError(message, status_code=status, payload=payload)
     if 400 <= status < 500:
@@ -156,8 +184,10 @@ class AsyncHttpSession:
     """Async counterpart to :class:`HttpSession`.
 
     Wraps ``httpx.AsyncClient`` and implements manual exponential-backoff
-    retry for network errors and 429/5xx responses. Honors the
-    ``Retry-After`` header on 429 when present.
+    retry for network errors and 429/5xx responses on idempotent methods
+    (``_RETRY_METHODS``); a POST is sent exactly once. Honors the
+    ``Retry-After`` header on 429 when present. Redirects are not followed
+    (httpx default); a 3xx raises ``APIError``.
     """
 
     def __init__(
@@ -208,6 +238,7 @@ class AsyncHttpSession:
     ) -> httpx.Response:
         attempt = 0
         last_exc: Exception | None = None
+        retryable = method.upper() in _RETRY_METHODS
         while True:
             try:
                 response = await self._client.request(method, path, **kwargs)
@@ -222,7 +253,8 @@ class AsyncHttpSession:
                 last_exc.__cause__ = e
             else:
                 if (
-                    response.status_code in _RETRY_STATUS
+                    retryable
+                    and response.status_code in _RETRY_STATUS
                     and attempt < self._max_retries
                 ):
                     await self._sleep_for_retry(response, attempt)
@@ -230,13 +262,13 @@ class AsyncHttpSession:
                     continue
                 if response.status_code in allow_statuses:
                     return response
-                if response.status_code < 400:
+                if response.status_code < 300:
                     return response
                 _raise_for_status(
                     response.status_code, _safe_json(response), str(response.url)
                 )
 
-            if attempt >= self._max_retries:
+            if not retryable or attempt >= self._max_retries:
                 assert last_exc is not None
                 raise last_exc
             await asyncio.sleep(self._backoff_delay(attempt))

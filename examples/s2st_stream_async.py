@@ -6,7 +6,7 @@ to a WAV file.
 
 Usage:
     export KOTOBA_API_KEY=...
-    export KOTOBA_S2ST_EN_JA_URL=wss://.../sts
+    export KOTOBA_S2ST_URL=wss://.../sts
     uv run examples/s2st_stream_async.py [path/to/clip.mp3]
 """
 

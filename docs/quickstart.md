@@ -4,17 +4,17 @@ Goal: from zero to a working transcript / synthesized audio in ~10 minutes.
 
 ## 1. Get an API key
 
-Request a sandbox key from your Kotoba contact. Set it — along with the endpoints for the modalities you plan to use — in your shell:
+Request a sandbox key from your Kotoba contact, or use a fal key with the Kotoba apps on fal (see the README section "Using the Kotoba apps on fal" for the fal URLs). Set it — along with the endpoints for the modalities you plan to use — in your shell:
 
 ```bash
 export KOTOBA_API_KEY=sk_...
-export KOTOBA_ASR_REST_URL=https://.../v1            # batch ASR (default transport)
+export KOTOBA_ASR_REST_URL=https://.../v1            # REST speech-to-text (transcribe())
 export KOTOBA_ASR_URL=wss://.../asr                  # live streaming ASR
-export KOTOBA_S2ST_EN_JA_URL=wss://.../sts           # speech-to-speech en -> ja
-export KOTOBA_TTS_JA_URL=wss://.../tts               # streaming TTS (ja)
+export KOTOBA_S2ST_URL=wss://.../sts                 # speech-to-speech translation (languages per session)
+export KOTOBA_TTS_URL=wss://.../tts                  # streaming TTS (language per session)
 ```
 
-Only the routes you actually call need to be set. You can also register routes from code with `kotoba.register_endpoint(modality, src, tgt, url)`, or pass `url=...` directly to any `stream(...)` / `transcribe(...)` / `synthesize(...)` call.
+Only the services you actually call need to be set; one URL per service covers every language, since the language is chosen per session. If one language is served by a separate deployment, route it with `kotoba.register_endpoint(modality, src, tgt, url)`, or pass `url=...` directly to any `stream(...)` / `transcribe(...)` / `synthesize(...)` call.
 
 ## 2. Install
 
@@ -70,10 +70,10 @@ Async version: replace `with` with `async with` and add `await` to each call. Se
 
 ASR has two transports. Pick by use case:
 
-- **REST** (`client.asr.transcribe`) — POST + poll. Default for batch / file-based work. Best for long files, scales naturally on the server, supports per-segment timestamps.
+- **REST** (`client.asr.transcribe`) — one `POST /v1/speech-to-text` per file to an `stt` deployment (fal: `kotoba-stt`). For files up to the server's limit (120 s by default); per-segment timestamps on request. Longer files go through `transcribe(..., batch=True)`, the asynchronous job API of self-hosted `streaming_stt` deployments.
 - **WebSocket** (`client.asr.stream` / `client.asr.transcribe_stream`) — push PCM16 chunks, read partial transcripts as they arrive. Best for live mic / latency-sensitive pipelines.
 
-### REST batch
+### REST (file transcription)
 
 ```python
 import kotoba
@@ -94,6 +94,8 @@ for seg in result.segments:
 
 `transcribe()` accepts any audio format `soundfile` can decode (WAV / FLAC / OGG / MP3 / …) — the SDK uploads the file as-is and the server does the heavy lifting.
 
+`transcribe()` sends one `POST /v1/speech-to-text` to an `stt` deployment (fal: `kotoba-stt`), subject to the server's audio-length limit (120 s by default). Self-hosted `streaming_stt` deployments offer the asynchronous job API instead: `client.asr.transcribe("clip.mp3", batch=True)` submits the file and polls until the job finishes. On fal, only the default mode and the WebSocket `/v1/realtime` are available; the job API is not.
+
 ### Streaming (live mic)
 
 For the realtime / mic case — where you want transcript deltas to surface *while* audio is still being captured — pass a generator directly to `transcribe_stream(...)`. The feeder and receiver run concurrently, so the first delta can fire before your source is exhausted:
@@ -109,7 +111,7 @@ Optional knobs on both `stream(...)` and `transcribe_stream(...)`:
 
 - `language`: `"ja"` or `"en"`.
 - `sample_rate`: defaults to 24 kHz; the session resamples internally if your capture rate differs.
-- `keywords`: list of hotword biases, e.g. `["Kotobatech", "LLM"]`.
+- `style_preference`: `{"human_name": "kana"}` to transcribe personal names in katakana.
 
 ## 6. Speech-to-Speech translation
 
@@ -126,16 +128,16 @@ For incremental transcripts and audio out (e.g. live captioning), use `client.s2
 
 ## 7. Where to go next
 
-- `examples/` for runnable demos (REST + streaming + mic). Each example has a default audio path under `examples/audio/`, so `uv run examples/asr_rest_sync.py` works without arguments.
-- `kotoba.register_endpoint(modality, src, tgt, url)` if your routes aren't in the default registry yet.
+- `examples/` for runnable demos (REST + streaming + mic). Each example has a default audio path under `examples/audio/`, so `uv run examples/asr_transcribe_sync.py` works without arguments.
+- `kotoba.register_endpoint(modality, src, tgt, url)` to send one language (pair) of a service to a different deployment.
 - API reference: imports under `kotoba.*`.
 
 ## Notes / current limitations
 
-- The SDK has no built-in endpoint defaults: every route must come from a `KOTOBA_*_URL` env var, a `register_endpoint(...)` call, or an explicit `url=...` argument. For language pairs beyond the env-var set, register them:
+- The SDK has no built-in endpoint defaults: every service URL must come from a `KOTOBA_*_URL` env var, a `KotobaClient(...)` kwarg, a `register_endpoint(...)` call, or an explicit `url=...` argument. A language served by a separate deployment gets its own route:
 
   ```python
-  kotoba.register_endpoint("tts", None, "ko", "wss://your-ko-tts-host/ws")
+  kotoba.register_endpoint("tts", None, "ko", "wss://your-ko-tts-host/ws")  # only Korean goes here
   ```
 
 - WebSocket ASR accepts PCM16 LE mono audio. `client.asr.transcribe(path)` (REST) decodes any `soundfile`-readable format; for `stream(...)` the caller is responsible for providing raw PCM16 bytes.

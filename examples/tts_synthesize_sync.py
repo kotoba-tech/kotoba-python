@@ -4,7 +4,7 @@ One-shot ``synthesize(text).to_wav(path)`` — the simplest TTS surface.
 
 Usage:
     export KOTOBA_API_KEY=...
-    export KOTOBA_TTS_JA_URL=wss://.../tts
+    export KOTOBA_TTS_URL=wss://.../tts
     uv run examples/tts_synthesize_sync.py
 """
 

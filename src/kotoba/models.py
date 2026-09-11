@@ -133,7 +133,10 @@ class TranscriptResult(BaseModel):
     job_id: str | None = None
     segments: list[Segment] | None = Field(
         default=None,
-        description="Populated only when transcribe(..., with_timestamps=True).",
+        description=(
+            "Timed segments when with_timestamps=True and the deployment produced "
+            "timings; None otherwise, in both transcribe() modes."
+        ),
     )
     metadata: dict[str, Any] = Field(default_factory=dict)
 

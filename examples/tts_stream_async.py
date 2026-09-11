@@ -8,7 +8,7 @@ cold-start metric that includes TCP/TLS setup.
 
 Usage:
     export KOTOBA_API_KEY=...
-    export KOTOBA_TTS_JA_URL=wss://.../v2/tts/ws
+    export KOTOBA_TTS_URL=wss://.../v2/tts/ws
     uv run examples/tts_stream_async.py
 """
 

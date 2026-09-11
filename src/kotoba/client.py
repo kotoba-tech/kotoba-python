@@ -16,10 +16,10 @@ Both own sub-clients for each modality::
 URL kwargs map 1:1 onto env vars (all optional, read at construction
 time if not passed explicitly):
 
-    url                → KOTOBA_ASR_REST_URL       (REST transcription jobs)
-    asr_ws_url         → KOTOBA_ASR_URL            (WS live ASR)
-    tts_ja_ws_url      → KOTOBA_TTS_JA_URL         (WS Japanese TTS)
-    s2st_en_ja_ws_url  → KOTOBA_S2ST_EN_JA_URL     (WS en→ja speech translation)
+    url          → KOTOBA_ASR_REST_URL   (REST speech-to-text)
+    asr_ws_url   → KOTOBA_ASR_URL        (WS live ASR)
+    tts_ws_url   → KOTOBA_TTS_URL        (WS TTS; language chosen per session)
+    s2st_ws_url  → KOTOBA_S2ST_URL       (WS speech translation; languages per session)
 
 Usage::
 
@@ -49,8 +49,8 @@ from kotoba.tts import AsyncTTSClient, TTSClient
 _API_KEY_ENV_VAR = "KOTOBA_API_KEY"
 _API_URL_ENV_VAR = "KOTOBA_ASR_REST_URL"
 _WS_ASR_ENV_VAR = "KOTOBA_ASR_URL"
-_WS_TTS_JA_ENV_VAR = "KOTOBA_TTS_JA_URL"
-_WS_S2ST_EN_JA_ENV_VAR = "KOTOBA_S2ST_EN_JA_URL"
+_WS_TTS_ENV_VAR = "KOTOBA_TTS_URL"
+_WS_S2ST_ENV_VAR = "KOTOBA_S2ST_URL"
 
 
 def _resolve_from_env(name: str) -> str | None:
@@ -60,18 +60,19 @@ def _resolve_from_env(name: str) -> str | None:
 
 def _register_ws_routes(
     asr_ws_url: str | None,
-    tts_ja_ws_url: str | None,
-    s2st_en_ja_ws_url: str | None,
+    tts_ws_url: str | None,
+    s2st_ws_url: str | None,
 ) -> None:
-    """Push explicit WS URLs into the module-level routing registry so
-    ``client.asr.stream()`` / ``client.tts.stream()`` / ``client.s2st.stream()``
-    pick them up without an explicit ``url=`` kwarg per call."""
+    """Push explicit WS URLs into the module-level routing registry as the
+    service defaults, so ``client.asr.stream()`` / ``client.tts.stream()`` /
+    ``client.s2st.stream()`` pick them up for any language without an explicit
+    ``url=`` kwarg per call."""
     if asr_ws_url:
         register_endpoint("asr", None, None, asr_ws_url)
-    if tts_ja_ws_url:
-        register_endpoint("tts", None, "ja", tts_ja_ws_url)
-    if s2st_en_ja_ws_url:
-        register_endpoint("s2st", "en", "ja", s2st_en_ja_ws_url)
+    if tts_ws_url:
+        register_endpoint("tts", None, None, tts_ws_url)
+    if s2st_ws_url:
+        register_endpoint("s2st", None, None, s2st_ws_url)
 
 
 class KotobaClient:
@@ -85,12 +86,15 @@ class KotobaClient:
             ``KOTOBA_ASR_REST_URL``.
         asr_ws_url: WebSocket URL for live ASR. Falls back to
             ``KOTOBA_ASR_URL``.
-        tts_ja_ws_url: WebSocket URL for Japanese TTS. Falls back to
-            ``KOTOBA_TTS_JA_URL``.
-        s2st_en_ja_ws_url: WebSocket URL for English→Japanese S2ST. Falls
-            back to ``KOTOBA_S2ST_EN_JA_URL``.
+        tts_ws_url: WebSocket URL for TTS; the language is chosen per
+            session. Falls back to ``KOTOBA_TTS_URL``.
+        s2st_ws_url: WebSocket URL for speech-to-speech translation; the
+            languages are chosen per session. Falls back to
+            ``KOTOBA_S2ST_URL``.
         timeout: Per-request HTTP timeout in seconds (REST only).
-        max_retries: Retry budget for network errors and transient 5xx/429.
+        max_retries: Retry budget for GET requests (network errors, 429,
+            5xx). A POST is sent exactly once: an upload that timed out may
+            already have been accepted, transcribed and billed.
 
     Each URL can be omitted if the corresponding feature isn't used; the
     SDK only fails when a sub-client is actually invoked without a URL.
@@ -102,26 +106,24 @@ class KotobaClient:
         api_key: str | None = None,
         url: str | None = None,
         asr_ws_url: str | None = None,
-        tts_ja_ws_url: str | None = None,
-        s2st_en_ja_ws_url: str | None = None,
+        tts_ws_url: str | None = None,
+        s2st_ws_url: str | None = None,
         timeout: float = 30.0,
         max_retries: int = 3,
     ) -> None:
         api_key = api_key or _resolve_from_env(_API_KEY_ENV_VAR)
         url = url or _resolve_from_env(_API_URL_ENV_VAR)
         asr_ws_url = asr_ws_url or _resolve_from_env(_WS_ASR_ENV_VAR)
-        tts_ja_ws_url = tts_ja_ws_url or _resolve_from_env(_WS_TTS_JA_ENV_VAR)
-        s2st_en_ja_ws_url = s2st_en_ja_ws_url or _resolve_from_env(
-            _WS_S2ST_EN_JA_ENV_VAR
-        )
+        tts_ws_url = tts_ws_url or _resolve_from_env(_WS_TTS_ENV_VAR)
+        s2st_ws_url = s2st_ws_url or _resolve_from_env(_WS_S2ST_ENV_VAR)
 
         self._api_key = api_key
         self._url = url
         self._asr_ws_url = asr_ws_url
-        self._tts_ja_ws_url = tts_ja_ws_url
-        self._s2st_en_ja_ws_url = s2st_en_ja_ws_url
+        self._tts_ws_url = tts_ws_url
+        self._s2st_ws_url = s2st_ws_url
 
-        _register_ws_routes(asr_ws_url, tts_ja_ws_url, s2st_en_ja_ws_url)
+        _register_ws_routes(asr_ws_url, tts_ws_url, s2st_ws_url)
 
         self._http: HttpSession | None = None
         if url:
@@ -150,12 +152,12 @@ class KotobaClient:
         return self._asr_ws_url
 
     @property
-    def tts_ja_ws_url(self) -> str | None:
-        return self._tts_ja_ws_url
+    def tts_ws_url(self) -> str | None:
+        return self._tts_ws_url
 
     @property
-    def s2st_en_ja_ws_url(self) -> str | None:
-        return self._s2st_en_ja_ws_url
+    def s2st_ws_url(self) -> str | None:
+        return self._s2st_ws_url
 
 
 class AsyncKotobaClient:
@@ -173,26 +175,24 @@ class AsyncKotobaClient:
         api_key: str | None = None,
         url: str | None = None,
         asr_ws_url: str | None = None,
-        tts_ja_ws_url: str | None = None,
-        s2st_en_ja_ws_url: str | None = None,
+        tts_ws_url: str | None = None,
+        s2st_ws_url: str | None = None,
         timeout: float = 30.0,
         max_retries: int = 3,
     ) -> None:
         api_key = api_key or _resolve_from_env(_API_KEY_ENV_VAR)
         url = url or _resolve_from_env(_API_URL_ENV_VAR)
         asr_ws_url = asr_ws_url or _resolve_from_env(_WS_ASR_ENV_VAR)
-        tts_ja_ws_url = tts_ja_ws_url or _resolve_from_env(_WS_TTS_JA_ENV_VAR)
-        s2st_en_ja_ws_url = s2st_en_ja_ws_url or _resolve_from_env(
-            _WS_S2ST_EN_JA_ENV_VAR
-        )
+        tts_ws_url = tts_ws_url or _resolve_from_env(_WS_TTS_ENV_VAR)
+        s2st_ws_url = s2st_ws_url or _resolve_from_env(_WS_S2ST_ENV_VAR)
 
         self._api_key = api_key
         self._url = url
         self._asr_ws_url = asr_ws_url
-        self._tts_ja_ws_url = tts_ja_ws_url
-        self._s2st_en_ja_ws_url = s2st_en_ja_ws_url
+        self._tts_ws_url = tts_ws_url
+        self._s2st_ws_url = s2st_ws_url
 
-        _register_ws_routes(asr_ws_url, tts_ja_ws_url, s2st_en_ja_ws_url)
+        _register_ws_routes(asr_ws_url, tts_ws_url, s2st_ws_url)
 
         self._http: AsyncHttpSession | None = None
         if url:
@@ -221,12 +221,12 @@ class AsyncKotobaClient:
         return self._asr_ws_url
 
     @property
-    def tts_ja_ws_url(self) -> str | None:
-        return self._tts_ja_ws_url
+    def tts_ws_url(self) -> str | None:
+        return self._tts_ws_url
 
     @property
-    def s2st_en_ja_ws_url(self) -> str | None:
-        return self._s2st_en_ja_ws_url
+    def s2st_ws_url(self) -> str | None:
+        return self._s2st_ws_url
 
     async def close(self) -> None:
         if self._http is not None:
