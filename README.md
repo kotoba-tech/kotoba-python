@@ -269,10 +269,12 @@ client.asr.get_job(job_id)                -> JobStatus       # GET, 202→proces
 
 ### WebSocket entry points
 
-```python
-client.asr.stream(language="ja", sample_rate=24000, keywords=None, style_preference=None, url=...)  -> ASRSession
-client.asr.transcribe_stream(audio_iter, language="ja", sample_rate=24000, keywords=None, style_preference=None, url=...)  -> Iterator[str]
+For streaming ASR, use `client.asr.stream()` to manage a session or
+`client.asr.transcribe_stream()` to transcribe an audio iterable. Configuration and
+event semantics are defined in the
+[SDK contract](../../../.agent/sdd/kotoba-api-spec.md#python-sdk-streaming-asr).
 
+```python
 client.tts.stream(language="ja", speaker_id=..., url=...)  -> TTSSession
 client.tts.synthesize_stream(text, ...)                    -> Iterator[bytes]
 client.tts.synthesize(text, ...)                           -> AudioResult

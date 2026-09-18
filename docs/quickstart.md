@@ -101,7 +101,9 @@ for seg in result.segments:
 For the realtime / mic case — where you want transcript deltas to surface *while* audio is still being captured — pass a generator directly to `transcribe_stream(...)`. The feeder and receiver run concurrently, so the first delta can fire before your source is exhausted:
 
 ```python
-for delta in client.asr.transcribe_stream(mic_chunks(), language="ja"):
+for delta in client.asr.transcribe_stream(
+    mic_chunks(), language="ja", turn_detection=kotoba.ServerVAD(silence_duration_ms=800)
+):
     print(delta, end="", flush=True)
 ```
 
@@ -112,6 +114,9 @@ Optional knobs on both `stream(...)` and `transcribe_stream(...)`:
 - `language`: `"ja"` or `"en"`.
 - `sample_rate`: defaults to 24 kHz; the session resamples internally if your capture rate differs.
 - `style_preference`: `{"human_name": "kana"}` to transcribe personal names in katakana.
+
+For `turn_detection` configuration, defaults, and completed-turn events, see the
+[SDK contract](../../../../.agent/sdd/kotoba-api-spec.md#python-sdk-streaming-asr).
 
 ## 6. Speech-to-Speech translation
 

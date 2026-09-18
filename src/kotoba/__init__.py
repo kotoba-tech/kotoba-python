@@ -20,6 +20,7 @@ from kotoba.models import (
     JobStatus,
     S2STResult,
     Segment,
+    ServerVAD,
     SessionConfig,
     StreamEvent,
     TranscriptResult,
@@ -49,6 +50,7 @@ __all__ = [
     "AudioResult",
     "S2STResult",
     "SessionConfig",
+    "ServerVAD",
     "StreamEvent",
     # Errors
     "KotobaError",

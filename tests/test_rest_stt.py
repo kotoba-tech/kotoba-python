@@ -34,7 +34,8 @@ def test_request_encodes_every_option():
     }
 
 
-def test_parse_maps_timed_words_to_segments_and_keeps_metadata():
+@pytest.mark.parametrize("spacing_time", [None, 0.8])
+def test_parse_maps_timed_words_to_segments_and_keeps_metadata(spacing_time):
     result = parse_speech_to_text(
         {
             "language_code": "ja",
@@ -43,7 +44,7 @@ def test_parse_maps_timed_words_to_segments_and_keeps_metadata():
             "audio_duration_secs": 1.2,
             "words": [
                 {"text": "こんにちは", "type": "word", "start": 0.0, "end": 0.8},
-                {"text": " ", "type": "spacing", "start": None, "end": None},
+                {"text": " ", "type": "spacing", "start": spacing_time, "end": spacing_time},
                 {"text": "世界", "type": "word", "start": 0.9, "end": 1.2},
             ],
         }

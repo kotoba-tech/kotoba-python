@@ -81,13 +81,12 @@ async def main(input_audio: str, language: str) -> None:
                             f"[{first_text_at*1000:7.0f} ms] first transcript "
                             f"(TTFB from first audio sent = {first_text_at*1000:.0f} ms)"
                         )
+                    # Completed turns repeat these deltas; accumulate each delta only once.
                     parts.append(event.text)
                     elapsed = time.monotonic() - t0_holder.get(
                         "first_chunk_sent_at", time.monotonic()
                     )
                     print(f"[{elapsed*1000:7.0f} ms] <- {event.text!r}")
-                elif event.type == "final_transcript" and event.text:
-                    parts = [event.text]
                 elif event.type == "done":
                     break
             await feeder

@@ -64,6 +64,7 @@ class _Word(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     text: str
+    type: Literal["word", "spacing", "audio_event"] = "word"
     start: float | None = None
     end: float | None = None
 
@@ -102,9 +103,8 @@ def parse_speech_to_text(payload: Any) -> TranscriptResult:
             payload=payload if isinstance(payload, dict) else {"detail": str(payload)[:512]},
         ) from exc
 
-    # words=[] unless timestamps were requested; an entry without timing
-    # (spacing, audio events) carries no start/end.
-    timed = [w for w in body.words if w.start is not None and w.end is not None]
+    # Spacing can have zero-duration times; only lexical words become segments.
+    timed = [w for w in body.words if w.type == "word" and w.start is not None and w.end is not None]
     segments = [Segment(text=w.text, start=w.start, end=w.end) for w in timed] or None
     metadata: dict[str, Any] = {"language_code": body.language_code, "language_probability": body.language_probability}
     if body.audio_duration_secs is not None:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Literal, Mapping
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 # Accepts every wire name the TTS server echoes back in ``session.created``
 # (see kotoba_sdk_gpu ``_OUTPUT_FORMAT_ALIASES``): a narrower Literal would make
@@ -22,6 +22,13 @@ AudioFormat = Literal[
     "twilio",
     "opus",
 ]
+
+
+class ServerVAD(BaseModel):
+    """Blank-model-output turn detection configuration for streaming ASR."""
+
+    type: Literal["server_vad"] = "server_vad"
+    silence_duration_ms: StrictInt | None = Field(default=800, ge=0)
 
 
 class TranscriptionStylePreference(BaseModel):

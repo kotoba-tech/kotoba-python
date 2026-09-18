@@ -19,11 +19,11 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from typing import Any, AsyncIterable, Iterable, Union
+from typing import Any, AsyncIterable, Iterable, Literal, Union
 
 from kotoba._ws_base import AsyncSession, SyncSession
 from kotoba.errors import APIError, ProtocolError
-from kotoba.models import StreamEvent, TranscriptionStylePreference
+from kotoba.models import ServerVAD, StreamEvent, TranscriptionStylePreference
 
 AudioSource = Union[Iterable[bytes], AsyncIterable[bytes]]
 _FEED_STOP = object()
@@ -52,6 +52,7 @@ class AsyncASRSession(AsyncSession):
         sample_rate: int = 24000,
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
+        turn_detection: ServerVAD | dict | Literal[False] | None = None,
         api_key: str | None = None,
     ) -> None:
         super().__init__(url, api_key=api_key)
@@ -59,12 +60,17 @@ class AsyncASRSession(AsyncSession):
         self._sample_rate = sample_rate
         self._keywords = keywords
         self._style_preference = TranscriptionStylePreference.coerce(style_preference)
+        self._turn_detection = (
+            turn_detection if turn_detection is None or turn_detection is False
+            else ServerVAD.model_validate(turn_detection)
+        )
         self._session_ready = asyncio.Event()
         self._event_counter = 0
 
     # -- handshake ---------------------------------------------------------
 
-    async def _handshake(self) -> None:
+    def _session_update(self) -> dict[str, Any]:
+        """Serialize session options into the ASR wire request."""
         update = {
             "type": "transcription_session.update",
             "session": {
@@ -75,7 +81,6 @@ class AsyncASRSession(AsyncSession):
                     "language": self._language,
                     "target_language": self._language,
                 },
-                "turn_detection": False,
             },
         }
         if self._keywords:
@@ -84,7 +89,15 @@ class AsyncASRSession(AsyncSession):
             style = self._style_preference.to_wire()
             if style:
                 update["session"]["input_audio_transcription"]["style_preference"] = style
-        await self._send_json(update)
+        if self._turn_detection is not None:
+            update["session"]["turn_detection"] = (
+                False if self._turn_detection is False
+                else self._turn_detection.model_dump(exclude_none=True)
+            )
+        return update
+
+    async def _handshake(self) -> None:
+        await self._send_json(self._session_update())
         await self._session_ready.wait()
 
     # -- senders -----------------------------------------------------------
@@ -200,6 +213,7 @@ class ASRSession(SyncSession):
         sample_rate: int = 24000,
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
+        turn_detection: ServerVAD | dict | Literal[False] | None = None,
         api_key: str | None = None,
     ) -> None:
         super().__init__(
@@ -209,6 +223,7 @@ class ASRSession(SyncSession):
                 sample_rate=sample_rate,
                 keywords=keywords,
                 style_preference=style_preference,
+                turn_detection=turn_detection,
                 api_key=api_key,
             )
         )

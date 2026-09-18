@@ -37,6 +37,7 @@ from kotoba.models import (
     JobIDResponse,
     JobState,
     JobStatus,
+    ServerVAD,
     TranscriptionStylePreference,
     TranscriptResult,
 )
@@ -345,6 +346,7 @@ class ASRClient:
         sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
+        turn_detection: ServerVAD | dict | Literal[False] | None = None,
         url: str | None = None,
     ) -> ASRSession:
         """Open a streaming ASR session. Caller drives send_audio / commit."""
@@ -355,6 +357,7 @@ class ASRClient:
             sample_rate=sample_rate,
             keywords=keywords,
             style_preference=style_preference,
+            turn_detection=turn_detection,
             api_key=self._api_key,
         )
 
@@ -366,6 +369,7 @@ class ASRClient:
         sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
+        turn_detection: ServerVAD | dict | Literal[False] | None = None,
         url: str | None = None,
     ) -> TranscriptResult:
         """Internal helper; not part of the documented public API.
@@ -381,6 +385,7 @@ class ASRClient:
             sample_rate=sample_rate,
             keywords=keywords,
             style_preference=style_preference,
+            turn_detection=turn_detection,
             url=url,
         ) as session:
             for chunk in pace(
@@ -391,8 +396,6 @@ class ASRClient:
             for event in session:
                 if event.type == "partial_transcript" and event.text:
                     parts.append(event.text)
-                elif event.type == "final_transcript" and event.text:
-                    parts = [event.text]
                 elif event.type == "done":
                     break
         return TranscriptResult(text="".join(parts))
@@ -405,6 +408,7 @@ class ASRClient:
         sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
+        turn_detection: ServerVAD | dict | Literal[False] | None = None,
         url: str | None = None,
     ) -> Iterator[str]:
         """Yield transcript deltas for a streaming pcm16 source.
@@ -419,6 +423,7 @@ class ASRClient:
             sample_rate=sample_rate,
             keywords=keywords,
             style_preference=style_preference,
+            turn_detection=turn_detection,
             url=url,
         )
         with session:
@@ -431,8 +436,6 @@ class ASRClient:
             try:
                 for event in session:
                     if event.type == "partial_transcript" and event.text:
-                        yield event.text
-                    elif event.type == "final_transcript" and event.text:
                         yield event.text
                     elif event.type == "done":
                         break
@@ -679,6 +682,7 @@ class AsyncASRClient:
         sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
+        turn_detection: ServerVAD | dict | Literal[False] | None = None,
         url: str | None = None,
     ) -> AsyncASRSession:
         return AsyncASRSession(
@@ -687,6 +691,7 @@ class AsyncASRClient:
             sample_rate=sample_rate,
             keywords=keywords,
             style_preference=style_preference,
+            turn_detection=turn_detection,
             api_key=self._api_key,
         )
 
@@ -698,6 +703,7 @@ class AsyncASRClient:
         sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
+        turn_detection: ServerVAD | dict | Literal[False] | None = None,
         url: str | None = None,
     ) -> TranscriptResult:
         """Internal helper; not part of the documented public API.
@@ -712,6 +718,7 @@ class AsyncASRClient:
             sample_rate=sample_rate,
             keywords=keywords,
             style_preference=style_preference,
+            turn_detection=turn_detection,
             url=url,
         ) as session:
             async for chunk in apace(
@@ -722,8 +729,6 @@ class AsyncASRClient:
             async for event in session:
                 if event.type == "partial_transcript" and event.text:
                     parts.append(event.text)
-                elif event.type == "final_transcript" and event.text:
-                    parts = [event.text]
                 elif event.type == "done":
                     break
         return TranscriptResult(text="".join(parts))
@@ -736,6 +741,7 @@ class AsyncASRClient:
         sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
+        turn_detection: ServerVAD | dict | Literal[False] | None = None,
         url: str | None = None,
     ) -> AsyncIterator[str]:
         async with self.stream(
@@ -743,14 +749,13 @@ class AsyncASRClient:
             sample_rate=sample_rate,
             keywords=keywords,
             style_preference=style_preference,
+            turn_detection=turn_detection,
             url=url,
         ) as session:
             feeder = asyncio.create_task(session.feed(audio))
             try:
                 async for event in session:
                     if event.type == "partial_transcript" and event.text:
-                        yield event.text
-                    elif event.type == "final_transcript" and event.text:
                         yield event.text
                     elif event.type == "done":
                         break
