@@ -63,6 +63,27 @@ async def _capture_tts_open(**kwargs) -> dict:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "speaker_id,expected",
+    [
+        pytest.param(None, "male-01", id="ja-default"),
+        pytest.param("female-01", "female-01", id="explicit"),
+    ],
+)
+async def test_tts_handshake_speaker_id(speaker_id, expected):
+    session = AsyncTTSSession("ws://unused", language="ja", speaker_id=speaker_id)
+    sent: list[dict] = []
+
+    async def _send(payload: dict) -> None:
+        sent.append(payload)
+        session._session_ready.set()
+
+    session._send_json = _send  # type: ignore[method-assign]
+    await session._handshake()
+    assert sent[0]["speaker_id"] == expected
+
+
+@pytest.mark.asyncio
 async def test_tts_handshake_omits_format_when_unset():
     open_frame = await _capture_tts_open()
     assert "format" not in open_frame

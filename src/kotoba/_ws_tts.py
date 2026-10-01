@@ -30,9 +30,9 @@ from kotoba.models import StreamEvent
 logger = logging.getLogger(__name__)
 
 DEFAULT_SPEAKER_BY_LANGUAGE = {
-    # Available Japanese speakers: ``ja-man-m02-azawa`` (male) and
-    # ``ja-woman-f04-me`` (female). Pass ``speaker_id=`` to override.
-    "ja": "ja-man-m02-azawa",
+    # Available Japanese speakers: ``male-01`` and ``female-01``. Pass
+    # ``speaker_id=`` to override.
+    "ja": "male-01",
 }
 
 
