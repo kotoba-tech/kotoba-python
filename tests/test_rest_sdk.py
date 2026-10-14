@@ -328,6 +328,15 @@ STT_RESPONSE = {
     "words": [],
     "audio_duration_secs": 1.2,
 }
+STT_DIARIZED_RESPONSE = {
+    **STT_RESPONSE,
+    "text": "おはよう はい",
+    "words": [
+        {"text": "おはよう", "type": "word", "start": 0.0, "end": 0.5, "speaker_id": "speaker_1"},
+        {"text": " ", "type": "spacing", "start": 0.5, "end": 0.5, "speaker_id": "speaker_2"},
+        {"text": "はい", "type": "word", "start": 1.0, "end": 1.3, "speaker_id": "speaker_2"},
+    ],
+}
 
 
 def _part(body: bytes, name: str) -> list[bytes]:
@@ -599,4 +608,55 @@ async def test_async_transcribe_one_shot_rejects_a_non_json_200(fake_wav):
     with pytest.raises(ProtocolError, match="Non-JSON response body") as info:
         await client.transcribe(fake_wav)
     assert info.value.status_code == 200
+    await session.aclose()
+
+
+@responses.activate
+def test_transcribe_one_shot_sends_diarization_and_groups_utterances(fake_wav):
+    responses.add(responses.POST, STT_URL, json=STT_DIARIZED_RESPONSE, status=200)
+    result = _client().asr.transcribe(fake_wav, diarization=True, with_timestamps=True)
+    body = responses.calls[0].request.body
+    assert b'name="diarization"\r\n\r\ntrue' in body
+    assert [(u.speaker_id, u.text, u.start, u.end) for u in result.utterances] == [
+        ("speaker_1", "おはよう", 0.0, 0.5),
+        ("speaker_2", "はい", 1.0, 1.3),
+    ]
+    assert [s.speaker_id for s in result.segments] == ["speaker_1", "speaker_2"]
+
+
+@responses.activate
+def test_transcribe_one_shot_omits_diarization_by_default(fake_wav):
+    responses.add(responses.POST, STT_URL, json=STT_RESPONSE, status=200)
+    _client().asr.transcribe(fake_wav)
+    assert b'name="diarization"' not in responses.calls[0].request.body
+
+
+def test_transcribe_batch_rejects_diarization(fake_wav):
+    with pytest.raises(ValueError, match="diarization is only valid with batch=False"):
+        _client().asr.transcribe(fake_wav, batch=True, diarization=True)
+
+
+@responses.activate
+def test_transcribe_batch_accepts_diarization_false(fake_wav):
+    responses.add(responses.POST, JOBS_URL, json={"job_id": "job-d"}, status=202)
+    responses.add(responses.GET, f"{JOBS_URL}/job-d", json={"state": "done", "transcription": "ok"}, status=200)
+    result = _client().asr.transcribe(fake_wav, batch=True, diarization=False, poll_interval=0.01)
+    assert result.text == "ok"
+    assert result.utterances is None
+
+
+async def test_async_transcribe_one_shot_diarization(fake_wav):
+    seen = {}
+
+    def app(request: httpx.Request) -> httpx.Response:
+        seen["body"] = request.read()
+        return httpx.Response(200, json=STT_DIARIZED_RESPONSE)
+
+    session = _async_session_with(app, max_retries=0)
+    client = kotoba.AsyncASRClient(session, api_key="token-abc")
+    result = await client.transcribe(fake_wav, diarization=True)
+    assert b'name="diarization"\r\n\r\ntrue' in seen["body"]
+    assert [(u.speaker_id, u.text) for u in result.utterances] == [("speaker_1", "おはよう"), ("speaker_2", "はい")]
+    with pytest.raises(ValueError, match="diarization is only valid with batch=False"):
+        await client.transcribe(fake_wav, batch=True, diarization=True)
     await session.aclose()

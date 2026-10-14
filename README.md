@@ -229,6 +229,7 @@ transcribe(
     batch: bool = False,                # False: one POST /v1/speech-to-text; True: submit + poll /v1/transcription_jobs
     language: str | None = None,        # batch=False: None = the server's configured language; batch=True: None = "ja"
     with_timestamps: bool = False,      # per-segment timestamps (batch=False: must be enabled on the deployment)
+    diarization: bool = False,          # batch=False only: who said what in result.utterances; speaker_id on segments
     style_preference: TranscriptionStylePreference | dict | None = None,  # {"human_name": "kana"}
     keywords: list[str] | None = None,  # legacy hotword biasing; not supported on current deployments (rejected with 400)
     file_format: "other" | "pcm_s16le_16" | None = None,  # batch=False only; raw 16 kHz mono int16, or any encoded audio
@@ -239,7 +240,7 @@ transcribe(
 ) -> TranscriptResult
 ```
 
-`batch=False` (default) uploads the file in a single synchronous `POST /v1/speech-to-text` and returns the transcript — no job, no polling — for `stt` deployments (on fal `kotoba-stt`). The server's `max_audio_seconds` limit (120 s by default) applies; longer audio, and options the deployment has not enabled, come back as a `ProtocolError` (HTTP 400). Words with timings map to `TranscriptResult.segments`; `language_code` / `language_probability` / `audio_duration_secs` are in `TranscriptResult.metadata`.
+`batch=False` (default) uploads the file in a single synchronous `POST /v1/speech-to-text` and returns the transcript — no job, no polling — for `stt` deployments (on fal `kotoba-stt`). The server's `max_audio_seconds` limit (120 s by default) applies; longer audio, and options the deployment has not enabled, come back as a `ProtocolError` (HTTP 400). Words with timings map to `TranscriptResult.segments`; `language_code` / `language_probability` / `audio_duration_secs` are in `TranscriptResult.metadata`. `diarization=True` returns `TranscriptResult.utterances`, the runs of consecutive words by speaker in reading order (`speaker_id`, `text`, and `start` / `end` when `with_timestamps=True` is also set; `speaker_id` is `None` for a run the model did not attribute), and sets `speaker_id` on each timed segment. Only deployments whose model carries speaker tokens support it (on fal, `kotoba-stt` once it serves the diarized model); a deployment without them rejects the request — `ProtocolError` (HTTP 400) when it declares so, `APIError` (HTTP 503) on older deployments.
 
 `batch=True` POSTs the file to `/transcription_jobs`, polls `GET /transcription_jobs/{id}` with exponential backoff and returns the final transcript (`job_id` set; `segments` when `with_timestamps=True` and the deployment produced timings, else `None`). Raises `TranscriptionError` on server-reported failure, `TimeoutError` if the deadline elapses. Self-hosted `streaming_stt` deployments only.
 

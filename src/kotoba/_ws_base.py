@@ -28,6 +28,7 @@ from typing import Any, AsyncIterator, Iterator
 
 import websockets
 import websockets.exceptions
+from websockets.datastructures import Headers
 
 from kotoba._auth import auth_headers
 from kotoba.errors import APIError, AuthError, KotobaError, ProtocolError, TimeoutError
@@ -71,16 +72,20 @@ class AsyncSession:
     async def start(self) -> None:
         if self._ws is not None:
             return
-        headers = auth_headers(self._api_key, self._url)
-
         connect_kwargs: dict[str, Any] = {
-            "additional_headers": headers,
             "ping_interval": 20,
             "ping_timeout": 10,
             "close_timeout": 0.5,
             "max_size": 10 * 1024 * 1024,
+            **self._connect_kwargs,
         }
-        connect_kwargs.update(self._connect_kwargs)
+        # The caller's headers are sent with the SDK's own. A header the caller
+        # names itself replaces the SDK's, whatever the case of the name.
+        headers = Headers(self._connect_kwargs.get("additional_headers") or {})
+        for name, value in auth_headers(self._api_key, self._url).items():
+            if name not in headers:
+                headers[name] = value
+        connect_kwargs["additional_headers"] = headers
 
         try:
             self._ws = await websockets.connect(self._url, **connect_kwargs)
@@ -98,11 +103,23 @@ class AsyncSession:
         # session init with an error frame (or just closes) must surface
         # that error now, not a generic timeout handshake_timeout later.
         handshake_task = asyncio.create_task(self._handshake())
-        done, _pending = await asyncio.wait(
-            {handshake_task, self._receiver_task},
-            timeout=self.handshake_timeout,
-            return_when=asyncio.FIRST_COMPLETED,
-        )
+        try:
+            done, _pending = await asyncio.wait(
+                {handshake_task, self._receiver_task},
+                timeout=self.handshake_timeout,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+        except BaseException:
+            # Cancelled while the handshake was pending (the caller's task was
+            # cancelled, or wrapped start() in a timeout). `async with` never
+            # runs __aexit__ for an interrupted __aenter__, so nothing else
+            # would close the socket and stop these tasks: the server would
+            # keep the session, and its worker slot, until its own limit.
+            handshake_task.cancel()
+            with suppress(asyncio.CancelledError, Exception):
+                await handshake_task
+            await self.close()
+            raise
 
         if handshake_task in done:
             exc = handshake_task.exception()

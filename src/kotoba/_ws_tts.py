@@ -63,8 +63,9 @@ class AsyncTTSSession(AsyncSession):
         audio_format: str | None = None,
         sample_rate: int | None = None,
         api_key: str | None = None,
+        connect_kwargs: dict[str, Any] | None = None,
     ) -> None:
-        super().__init__(url, api_key=api_key)
+        super().__init__(url, api_key=api_key, connect_kwargs=connect_kwargs)
         self._language = language
         self._speaker_id = speaker_id or DEFAULT_SPEAKER_BY_LANGUAGE.get(language)
         if self._speaker_id is None:

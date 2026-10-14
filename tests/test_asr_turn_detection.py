@@ -31,6 +31,18 @@ def test_session_request_serialization(factory, options, expected):
     assert payload["session"]["input_audio_transcription"]["target_language"] == "ja"
 
 
+
+@pytest.mark.parametrize("factory", [ASRClient, AsyncASRClient], ids=["sync", "async"])
+@pytest.mark.parametrize(("options", "expected"), [
+    pytest.param({}, None, id="default-off-omits-wire-field"),
+    pytest.param({"timestamps": True}, True, id="opt-in"),
+])
+def test_timestamps_opt_in_serialization(factory, options, expected):
+    session = factory().stream(url="ws://unused", language="ja", **options)
+    if isinstance(session, ASRSession):
+        session = session._asr
+    assert session._session_update()["session"]["input_audio_transcription"].get("timestamps") is expected
+
 @pytest.mark.parametrize("config", [
     pytest.param(True, id="true"),
     pytest.param(0, id="numeric-false"),
@@ -47,13 +59,15 @@ def test_invalid_turn_configuration(config):
 
 
 @pytest.mark.asyncio
-async def test_multiple_turn_events_preserve_ids_and_text():
+@pytest.mark.parametrize("with_span", [False, True], ids=["unavailable", "calibrated"])
+async def test_multiple_turn_events_preserve_ids_and_text(with_span):
     session = AsyncASRSession("ws://unused", language="ja")
     for item_id, text in [("turn-a", "Hello"), ("turn-b", "こんにちは")]:
         for kind, field in [("delta", "delta"), ("completed", "transcript")]:
             await session._handle_text_frame({
                 "type": f"conversation.item.input_audio_transcription.{kind}",
                 "item_id": item_id, field: text,
+                **({"start_ms": 780, "end_ms": 1190} if with_span else {}),
             })
     await session._handle_text_frame({"type": "input_audio_buffer.committed"})
     events = [event async for event in session]
@@ -64,3 +78,8 @@ async def test_multiple_turn_events_preserve_ids_and_text():
     assert [(event.text, event.metadata["item_id"]) for event in events[:4]] == [
         ("Hello", "turn-a"), ("Hello", "turn-a"), ("こんにちは", "turn-b"), ("こんにちは", "turn-b"),
     ]
+    for event in events[:4]:
+        if with_span:
+            assert (event.metadata["start_ms"], event.metadata["end_ms"]) == (780, 1190)
+        else:
+            assert "start_ms" not in event.metadata and "end_ms" not in event.metadata

@@ -21,7 +21,7 @@ import websockets
 from kotoba._ws_asr import AsyncASRSession
 from kotoba._ws_s2st import AsyncS2STSession, S2STSession
 from kotoba._ws_tts import AsyncTTSSession, TTSSession
-from kotoba.errors import AuthError, ProtocolError
+from kotoba.errors import APIError, AuthError, ProtocolError
 from kotoba.tts import AsyncTTSClient, TTSClient, _content_type_for
 
 
@@ -508,6 +508,47 @@ def test_error_frame_during_session_init_surfaces_promptly_sync():
         stop()
 
 
+@pytest.mark.parametrize(
+    "interrupt",
+    [
+        pytest.param("cancel", id="caller-task-cancelled"),
+        pytest.param("timeout", id="start-wrapped-in-a-timeout"),
+    ],
+)
+async def test_interrupted_session_start_closes_the_connection(interrupt):
+    """`async with` never runs __aexit__ when __aenter__ is interrupted, so
+    start() itself must close the socket; otherwise the server keeps the
+    session (and its worker slot) until its own limit."""
+    connected = threading.Event()
+    disconnected = threading.Event()
+
+    async def silent_server(websocket):
+        try:
+            await websocket.recv()  # the client's open frame; never answered
+            connected.set()
+            await websocket.wait_closed()
+        finally:
+            disconnected.set()
+
+    url, stop = _serve_in_thread(silent_server)
+    try:
+        session = AsyncTTSSession(url, language="ja", speaker_id="ja-man-1")
+        if interrupt == "cancel":
+            starting = asyncio.ensure_future(session.__aenter__())
+            assert await asyncio.to_thread(connected.wait, 5.0)
+            starting.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await starting
+        else:
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(session.start(), timeout=0.3)
+
+        assert await asyncio.to_thread(disconnected.wait, 5.0), "the server still holds the session"
+        assert session._receiver_task.done()
+    finally:
+        stop()
+
+
 async def test_x_fal_error_frame_surfaces_as_protocol_error():
     frame = {"type": "x-fal-error", "message": "No available batch slot"}
     url, stop = _serve_in_thread(_rejecting_tts_server(frame, {}))
@@ -549,5 +590,72 @@ async def test_ws_sends_bearer_auth_for_non_fal_host():
                     break
         # A local ws:// host is not fal.run, so the scheme is Bearer.
         assert seen["authorization"] == "Bearer secret"
+    finally:
+        stop()
+
+
+@pytest.mark.parametrize(
+    "open_session",
+    [
+        pytest.param(
+            lambda url, **kwargs: AsyncTTSSession(url, language="ja", speaker_id="ja-man-1", **kwargs),
+            id="tts",
+        ),
+        pytest.param(
+            lambda url, **kwargs: AsyncS2STSession(url, src_language="ja", tgt_language="en", **kwargs),
+            id="s2st",
+        ),
+        pytest.param(lambda url, **kwargs: AsyncASRSession(url, language="ja", **kwargs), id="asr"),
+    ],
+)
+async def test_ws_connect_kwargs_headers_are_sent_with_the_auth_header(open_session):
+    """A server that opens sessions on behalf of its own callers adds headers
+    of its own to the upgrade; they do not displace the SDK's."""
+    seen: dict = {}
+
+    def refuse(connection, request):
+        seen["marker"] = request.headers.get("x-marker")
+        seen["authorization"] = request.headers.get("Authorization")
+        return connection.respond(HTTPStatus.SERVICE_UNAVAILABLE, "busy")
+
+    url, stop = _serve_in_thread(_fake_tts_server, process_request=refuse)
+    try:
+        session = open_session(url, api_key="secret", connect_kwargs={"additional_headers": {"x-marker": "set"}})
+        with pytest.raises(APIError):
+            await session.start()
+        assert seen == {"marker": "set", "authorization": "Bearer secret"}
+    finally:
+        stop()
+
+
+@pytest.mark.parametrize(
+    "additional_headers",
+    [
+        pytest.param({"Authorization": "Bearer mine"}, id="same-spelling"),
+        pytest.param({"authorization": "Bearer mine"}, id="lower-case"),
+        pytest.param([("AUTHORIZATION", "Bearer mine")], id="pairs-upper-case"),
+    ],
+)
+async def test_ws_connect_kwargs_authorization_header_replaces_the_sdks(additional_headers):
+    """A caller that names the Authorization header itself sends its own
+    value, once: header names match whatever their case."""
+    seen: dict = {}
+
+    def refuse(connection, request):
+        seen["authorization"] = request.headers.get_all("Authorization")
+        return connection.respond(HTTPStatus.SERVICE_UNAVAILABLE, "busy")
+
+    url, stop = _serve_in_thread(_fake_tts_server, process_request=refuse)
+    try:
+        session = AsyncTTSSession(
+            url,
+            language="ja",
+            speaker_id="ja-man-1",
+            api_key="secret",
+            connect_kwargs={"additional_headers": additional_headers},
+        )
+        with pytest.raises(APIError):
+            await session.start()
+        assert seen == {"authorization": ["Bearer mine"]}
     finally:
         stop()

@@ -24,6 +24,7 @@ from kotoba.models import (
     SessionConfig,
     StreamEvent,
     TranscriptResult,
+    Utterance,
 )
 from kotoba.routing import endpoint_for, register_endpoint
 from kotoba.s2st import AsyncS2STClient, S2STClient
@@ -47,6 +48,7 @@ __all__ = [
     "JobStatus",
     "Segment",
     "TranscriptResult",
+    "Utterance",
     "AudioResult",
     "S2STResult",
     "SessionConfig",

@@ -92,6 +92,16 @@ for seg in result.segments:
     print(f"{seg.start:6.2f} - {seg.end:6.2f}  {seg.text}")
 ```
 
+With speaker diarization (deployments whose model carries speaker tokens, e.g. the diarized `kotoba-stt` on fal):
+
+```python
+result = client.asr.transcribe("meeting.wav", language="ja", diarization=True, with_timestamps=True)
+for u in result.utterances:
+    print(f"{u.start:6.2f}  {u.speaker_id}: {u.text}")
+```
+
+`utterances` groups consecutive words by speaker in reading order. Without `with_timestamps=True` the times are `None`; a run the model did not attribute has `speaker_id=None`.
+
 `transcribe()` accepts any audio format `soundfile` can decode (WAV / FLAC / OGG / MP3 / …) — the SDK uploads the file as-is and the server does the heavy lifting.
 
 `transcribe()` sends one `POST /v1/speech-to-text` to an `stt` deployment (fal: `kotoba-stt`), subject to the server's audio-length limit (120 s by default). Self-hosted `streaming_stt` deployments offer the asynchronous job API instead: `client.asr.transcribe("clip.mp3", batch=True)` submits the file and polls until the job finishes. On fal, only the default mode and the WebSocket `/v1/realtime` are available; the job API is not.

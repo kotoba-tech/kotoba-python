@@ -75,6 +75,7 @@ def _job_data(
 # transcribe() arguments that exist in only one mode (True = batch, False = one-shot).
 _MODE_ONLY = {
     "keywords": False,
+    "diarization": False,
     "file_format": False,
     "poll_interval": True,
     "poll_backoff": True,
@@ -179,6 +180,7 @@ class ASRClient:
         style_preference: TranscriptionStylePreference | dict | None = None,
         keywords: list[str] | None = None,
         file_format: FileFormat | None = None,
+        diarization: bool = False,
     ) -> TranscriptResult: ...
 
     @overload
@@ -206,6 +208,7 @@ class ASRClient:
         style_preference: TranscriptionStylePreference | dict | None = None,
         keywords: list[str] | None = None,
         file_format: FileFormat | None = None,
+        diarization: bool = False,
         poll_interval: float | None = None,
         poll_backoff: float | None = None,
         max_poll_interval: float | None = None,
@@ -222,7 +225,11 @@ class ASRClient:
         uses the server's configured language; ``keywords``, ``style_preference``
         (kana) and ``with_timestamps`` must be enabled on the deployment.
         ``file_format="pcm_s16le_16"`` uploads raw 16-bit LE PCM at 16 kHz mono;
-        ``"other"`` (default) is any encoded audio.
+        ``"other"`` (default) is any encoded audio. ``diarization=True`` asks the
+        deployment to attribute words to speakers: ``TranscriptResult.utterances``
+        holds the speaker turns and each timed segment carries ``speaker_id``
+        (turn times need ``with_timestamps=True``). Only models with speaker
+        tokens support it; others reject the request (see the README).
 
         ``batch=True``: the asynchronous job API — ``submit_job()``, then
         ``get_job()`` polled with exponential backoff until the job finishes.
@@ -241,6 +248,7 @@ class ASRClient:
             batch,
             keywords=keywords,
             file_format=file_format,
+            diarization=diarization or None,
             poll_interval=poll_interval,
             poll_backoff=poll_backoff,
             max_poll_interval=max_poll_interval,
@@ -264,6 +272,7 @@ class ASRClient:
             style_preference=style_preference,
             with_timestamps=with_timestamps,
             file_format=file_format or "other",
+            diarization=diarization,
         )
 
     def _transcribe_one_shot(
@@ -275,6 +284,7 @@ class ASRClient:
         style_preference: TranscriptionStylePreference | dict | None,
         with_timestamps: bool,
         file_format: FileFormat,
+        diarization: bool = False,
     ) -> TranscriptResult:
         self._require_http()
         request = SpeechToTextRequest.build(
@@ -283,6 +293,7 @@ class ASRClient:
             style_preference=style_preference,
             with_timestamps=with_timestamps,
             file_format=file_format,
+            diarization=diarization,
         )
         path = Path(audio_file_path)
         with path.open("rb") as f:
@@ -291,7 +302,7 @@ class ASRClient:
                 files={"file": (path.name, f, _guess_content_type(path))},
                 data=request.form,
             )
-        return parse_speech_to_text(decode_json(response))
+        return parse_speech_to_text(decode_json(response), diarization=diarization)
 
     def _transcribe_batch(
         self,
@@ -347,6 +358,7 @@ class ASRClient:
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
         turn_detection: ServerVAD | dict | Literal[False] | None = None,
+        timestamps: bool = False,
         url: str | None = None,
     ) -> ASRSession:
         """Open a streaming ASR session. Caller drives send_audio / commit."""
@@ -358,6 +370,7 @@ class ASRClient:
             keywords=keywords,
             style_preference=style_preference,
             turn_detection=turn_detection,
+            timestamps=timestamps,
             api_key=self._api_key,
         )
 
@@ -515,6 +528,7 @@ class AsyncASRClient:
         style_preference: TranscriptionStylePreference | dict | None = None,
         keywords: list[str] | None = None,
         file_format: FileFormat | None = None,
+        diarization: bool = False,
     ) -> TranscriptResult: ...
 
     @overload
@@ -542,6 +556,7 @@ class AsyncASRClient:
         style_preference: TranscriptionStylePreference | dict | None = None,
         keywords: list[str] | None = None,
         file_format: FileFormat | None = None,
+        diarization: bool = False,
         poll_interval: float | None = None,
         poll_backoff: float | None = None,
         max_poll_interval: float | None = None,
@@ -558,7 +573,11 @@ class AsyncASRClient:
         uses the server's configured language; ``keywords``, ``style_preference``
         (kana) and ``with_timestamps`` must be enabled on the deployment.
         ``file_format="pcm_s16le_16"`` uploads raw 16-bit LE PCM at 16 kHz mono;
-        ``"other"`` (default) is any encoded audio.
+        ``"other"`` (default) is any encoded audio. ``diarization=True`` asks the
+        deployment to attribute words to speakers: ``TranscriptResult.utterances``
+        holds the speaker turns and each timed segment carries ``speaker_id``
+        (turn times need ``with_timestamps=True``). Only models with speaker
+        tokens support it; others reject the request (see the README).
 
         ``batch=True``: the asynchronous job API — ``submit_job()``, then
         ``get_job()`` polled with exponential backoff until the job finishes.
@@ -577,6 +596,7 @@ class AsyncASRClient:
             batch,
             keywords=keywords,
             file_format=file_format,
+            diarization=diarization or None,
             poll_interval=poll_interval,
             poll_backoff=poll_backoff,
             max_poll_interval=max_poll_interval,
@@ -600,6 +620,7 @@ class AsyncASRClient:
             style_preference=style_preference,
             with_timestamps=with_timestamps,
             file_format=file_format or "other",
+            diarization=diarization,
         )
 
     async def _transcribe_one_shot(
@@ -611,6 +632,7 @@ class AsyncASRClient:
         style_preference: TranscriptionStylePreference | dict | None,
         with_timestamps: bool,
         file_format: FileFormat,
+        diarization: bool = False,
     ) -> TranscriptResult:
         self._require_http()
         request = SpeechToTextRequest.build(
@@ -619,6 +641,7 @@ class AsyncASRClient:
             style_preference=style_preference,
             with_timestamps=with_timestamps,
             file_format=file_format,
+            diarization=diarization,
         )
         path = Path(audio_file_path)
         data_bytes = await asyncio.to_thread(path.read_bytes)
@@ -627,7 +650,7 @@ class AsyncASRClient:
             files={"file": (path.name, data_bytes, _guess_content_type(path))},
             data=request.form,
         )
-        return parse_speech_to_text(decode_json(response))
+        return parse_speech_to_text(decode_json(response), diarization=diarization)
 
     async def _transcribe_batch(
         self,
@@ -683,6 +706,7 @@ class AsyncASRClient:
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
         turn_detection: ServerVAD | dict | Literal[False] | None = None,
+        timestamps: bool = False,
         url: str | None = None,
     ) -> AsyncASRSession:
         return AsyncASRSession(
@@ -692,6 +716,7 @@ class AsyncASRClient:
             keywords=keywords,
             style_preference=style_preference,
             turn_detection=turn_detection,
+            timestamps=timestamps,
             api_key=self._api_key,
         )
 

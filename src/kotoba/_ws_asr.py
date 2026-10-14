@@ -13,6 +13,13 @@ Implements the protocol from `kotoba-realtime-subtitles`'s
     input_audio_buffer.commit      (C->S)    — tell server "no more audio"
     …more delta frames flush out of the buffer…
     input_audio_buffer.committed   (S->C)    — terminal; session ends shortly after
+
+With ``timestamps=True``, transcripts carry flat ``start_ms`` / ``end_ms`` in event metadata,
+in milliseconds from the session's input audio start: a delta's own span on
+partials, the whole turn's span on finals. ``audio_processed_ms`` is the resume
+point: audio before it is fully transcribed within the calibrated guard (later
+text arrives with ``start_ms`` moved up to it), so a client resends from there
+after a disconnect.
 """
 
 from __future__ import annotations
@@ -53,13 +60,16 @@ class AsyncASRSession(AsyncSession):
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
         turn_detection: ServerVAD | dict | Literal[False] | None = None,
+        timestamps: bool = False,
         api_key: str | None = None,
+        connect_kwargs: dict[str, Any] | None = None,
     ) -> None:
-        super().__init__(url, api_key=api_key)
+        super().__init__(url, api_key=api_key, connect_kwargs=connect_kwargs)
         self._language = language
         self._sample_rate = sample_rate
         self._keywords = keywords
         self._style_preference = TranscriptionStylePreference.coerce(style_preference)
+        self._timestamps = timestamps
         self._turn_detection = (
             turn_detection if turn_detection is None or turn_detection is False
             else ServerVAD.model_validate(turn_detection)
@@ -89,6 +99,8 @@ class AsyncASRSession(AsyncSession):
             style = self._style_preference.to_wire()
             if style:
                 update["session"]["input_audio_transcription"]["style_preference"] = style
+        if self._timestamps:
+            update["session"]["input_audio_transcription"]["timestamps"] = True
         if self._turn_detection is not None:
             update["session"]["turn_detection"] = (
                 False if self._turn_detection is False
@@ -214,6 +226,7 @@ class ASRSession(SyncSession):
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
         turn_detection: ServerVAD | dict | Literal[False] | None = None,
+        timestamps: bool = False,
         api_key: str | None = None,
     ) -> None:
         super().__init__(
@@ -224,6 +237,7 @@ class ASRSession(SyncSession):
                 keywords=keywords,
                 style_preference=style_preference,
                 turn_detection=turn_detection,
+                timestamps=timestamps,
                 api_key=api_key,
             )
         )

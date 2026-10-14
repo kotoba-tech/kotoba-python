@@ -37,8 +37,9 @@ class AsyncS2STSession(AsyncSession):
         sample_rate: int = 24000,
         delay: int | None = None,
         api_key: str | None = None,
+        connect_kwargs: dict[str, Any] | None = None,
     ) -> None:
-        super().__init__(url, api_key=api_key)
+        super().__init__(url, api_key=api_key, connect_kwargs=connect_kwargs)
         self._src = src_language
         self._tgt = tgt_language
         self._sample_rate = sample_rate

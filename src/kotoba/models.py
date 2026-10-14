@@ -115,6 +115,19 @@ class Segment(BaseModel):
     text: str
     start: float = Field(description="Segment start time in seconds.")
     end: float = Field(description="Segment end time in seconds.")
+    speaker_id: str | None = Field(
+        default=None,
+        description="Speaker label when the request asked for diarization and the model attributed the word; None otherwise.",
+    )
+
+
+class Utterance(BaseModel):
+    """A run of consecutive words attributed to one speaker (``transcribe(diarization=True)``)."""
+
+    speaker_id: str | None = Field(description="Speaker label, or None where the model did not attribute the words.")
+    text: str
+    start: float | None = Field(default=None, description="Start of the first timed word, when with_timestamps=True.")
+    end: float | None = Field(default=None, description="End of the last timed word, when with_timestamps=True.")
 
 
 class JobStatus(BaseModel):
@@ -143,6 +156,13 @@ class TranscriptResult(BaseModel):
         description=(
             "Timed segments when with_timestamps=True and the deployment produced "
             "timings; None otherwise, in both transcribe() modes."
+        ),
+    )
+    utterances: list[Utterance] | None = Field(
+        default=None,
+        description=(
+            "Runs of consecutive words by speaker, in reading order, when diarization=True "
+            "on the one-shot endpoint; None otherwise. Times are set only with with_timestamps=True."
         ),
     )
     metadata: dict[str, Any] = Field(default_factory=dict)

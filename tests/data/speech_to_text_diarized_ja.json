@@ -1,0 +1,435 @@
+{
+ "language_code": "ja",
+ "language_probability": 1.0,
+ "text": "おはようございます。今日の会議は10時から始めましょう。\nはい、わかりました。資料は昨日メールで送っておきました。\nありがとうございます。では、予算の話から始めます。\n来月の予算は前月より2割ほど増える見込みです。",
+ "words": [
+  {
+   "text": "おはよう",
+   "type": "word",
+   "start": 0.0,
+   "end": 0.32,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "ござい",
+   "type": "word",
+   "start": 0.4,
+   "end": 0.56,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "ます",
+   "type": "word",
+   "start": 0.64,
+   "end": 0.8,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "。",
+   "type": "word",
+   "start": 0.92,
+   "end": 0.92,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "今日",
+   "type": "word",
+   "start": 1.64,
+   "end": 1.799,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "の",
+   "type": "word",
+   "start": 1.88,
+   "end": 1.88,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "会議",
+   "type": "word",
+   "start": 2.0,
+   "end": 2.16,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "は",
+   "type": "word",
+   "start": 2.24,
+   "end": 2.4,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "10",
+   "type": "word",
+   "start": 2.8,
+   "end": 2.96,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "時",
+   "type": "word",
+   "start": 3.04,
+   "end": 3.04,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "から",
+   "type": "word",
+   "start": 3.12,
+   "end": 3.339,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "始め",
+   "type": "word",
+   "start": 3.44,
+   "end": 3.579,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "ましょう",
+   "type": "word",
+   "start": 3.64,
+   "end": 3.939,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "。",
+   "type": "word",
+   "start": 4.04,
+   "end": 4.04,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "\n",
+   "type": "spacing",
+   "start": 4.56,
+   "end": 4.56,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "はい",
+   "type": "word",
+   "start": 4.8,
+   "end": 4.959,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "、",
+   "type": "word",
+   "start": 5.08,
+   "end": 5.08,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "わかり",
+   "type": "word",
+   "start": 5.28,
+   "end": 5.52,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "まし",
+   "type": "word",
+   "start": 5.6,
+   "end": 5.74,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "た",
+   "type": "word",
+   "start": 5.82,
+   "end": 5.879,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "。",
+   "type": "word",
+   "start": 6.24,
+   "end": 6.24,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "資料",
+   "type": "word",
+   "start": 7.04,
+   "end": 7.259,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "は",
+   "type": "word",
+   "start": 7.34,
+   "end": 7.499,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "昨日",
+   "type": "word",
+   "start": 7.84,
+   "end": 8.12,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "メール",
+   "type": "word",
+   "start": 8.24,
+   "end": 8.479,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "で",
+   "type": "word",
+   "start": 8.56,
+   "end": 8.599,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "送っ",
+   "type": "word",
+   "start": 8.78,
+   "end": 8.879,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "て",
+   "type": "word",
+   "start": 8.96,
+   "end": 8.96,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "おき",
+   "type": "word",
+   "start": 9.04,
+   "end": 9.199,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "まし",
+   "type": "word",
+   "start": 9.28,
+   "end": 9.36,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "た",
+   "type": "word",
+   "start": 9.48,
+   "end": 9.56,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "。",
+   "type": "word",
+   "start": 9.64,
+   "end": 9.64,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "\n",
+   "type": "spacing",
+   "start": 10.0,
+   "end": 10.0,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "ありがとう",
+   "type": "word",
+   "start": 10.16,
+   "end": 10.56,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "ござい",
+   "type": "word",
+   "start": 10.64,
+   "end": 10.819,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "ます",
+   "type": "word",
+   "start": 10.88,
+   "end": 11.059,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "。",
+   "type": "word",
+   "start": 11.2,
+   "end": 11.2,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "で",
+   "type": "word",
+   "start": 11.84,
+   "end": 11.92,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "は",
+   "type": "word",
+   "start": 12.0,
+   "end": 12.06,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "、",
+   "type": "word",
+   "start": 12.16,
+   "end": 12.16,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "予算",
+   "type": "word",
+   "start": 12.56,
+   "end": 12.839,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "の",
+   "type": "word",
+   "start": 12.92,
+   "end": 12.999,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "話",
+   "type": "word",
+   "start": 13.18,
+   "end": 13.259,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "から",
+   "type": "word",
+   "start": 13.34,
+   "end": 13.559,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "始め",
+   "type": "word",
+   "start": 13.64,
+   "end": 13.84,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "ます",
+   "type": "word",
+   "start": 13.92,
+   "end": 14.14,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "。",
+   "type": "word",
+   "start": 14.28,
+   "end": 14.28,
+   "speaker_id": "speaker_1"
+  },
+  {
+   "text": "\n",
+   "type": "spacing",
+   "start": 14.56,
+   "end": 14.56,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "来月",
+   "type": "word",
+   "start": 14.72,
+   "end": 15.02,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "の",
+   "type": "word",
+   "start": 15.1,
+   "end": 15.199,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "予算",
+   "type": "word",
+   "start": 15.28,
+   "end": 15.539,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "は",
+   "type": "word",
+   "start": 15.64,
+   "end": 15.76,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "前月",
+   "type": "word",
+   "start": 16.16,
+   "end": 16.48,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "より",
+   "type": "word",
+   "start": 16.64,
+   "end": 16.88,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "2",
+   "type": "word",
+   "start": 17.12,
+   "end": 17.219,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "割",
+   "type": "word",
+   "start": 17.34,
+   "end": 17.439,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "ほど",
+   "type": "word",
+   "start": 17.52,
+   "end": 17.66,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "増える",
+   "type": "word",
+   "start": 17.8,
+   "end": 18.0,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "見込み",
+   "type": "word",
+   "start": 18.08,
+   "end": 18.38,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "です",
+   "type": "word",
+   "start": 18.46,
+   "end": 18.6,
+   "speaker_id": "speaker_2"
+  },
+  {
+   "text": "。",
+   "type": "word",
+   "start": 18.7,
+   "end": 18.7,
+   "speaker_id": "speaker_2"
+  }
+ ],
+ "audio_duration_secs": 19.2
+}

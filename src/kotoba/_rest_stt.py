@@ -13,7 +13,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from kotoba.errors import ProtocolError
-from kotoba.models import Segment, TranscriptionStylePreference, TranscriptResult
+from kotoba.models import Segment, TranscriptionStylePreference, TranscriptResult, Utterance
 
 # Relative to the session base (``KOTOBA_ASR_REST_URL``, which includes ``/v1``),
 # exactly like the job API's ``/transcription_jobs``.
@@ -38,6 +38,7 @@ class SpeechToTextRequest:
         style_preference: TranscriptionStylePreference | dict | None,
         with_timestamps: bool,
         file_format: FileFormat,
+        diarization: bool = False,
     ) -> SpeechToTextRequest:
         # ``language`` is omitted when None so the server applies its configured
         # default; ``keywords`` goes out as repeated fields; the SDK-wide
@@ -48,6 +49,10 @@ class SpeechToTextRequest:
         }
         if language is not None:
             form["language"] = language
+        # Sent only when requested: deployments without speaker tokens answer
+        # it with an error, and older deployments do not know the field.
+        if diarization:
+            form["diarization"] = "true"
         if keywords:
             form["keywords"] = list(keywords)
         preference = TranscriptionStylePreference.coerce(style_preference)
@@ -67,6 +72,7 @@ class _Word(BaseModel):
     type: Literal["word", "spacing", "audio_event"] = "word"
     start: float | None = None
     end: float | None = None
+    speaker_id: str | None = None
 
 
 class _SpeechToTextResponse(BaseModel):
@@ -86,7 +92,7 @@ class _SpeechToTextResponse(BaseModel):
     audio_duration_secs: float | None = None
 
 
-def parse_speech_to_text(payload: Any) -> TranscriptResult:
+def parse_speech_to_text(payload: Any, *, diarization: bool = False) -> TranscriptResult:
     """Map the endpoint's 2xx body onto the SDK-wide :class:`TranscriptResult`.
 
     Raises :class:`ProtocolError` (``status_code=200``) when the body does not
@@ -105,8 +111,43 @@ def parse_speech_to_text(payload: Any) -> TranscriptResult:
 
     # Spacing can have zero-duration times; only lexical words become segments.
     timed = [w for w in body.words if w.type == "word" and w.start is not None and w.end is not None]
-    segments = [Segment(text=w.text, start=w.start, end=w.end) for w in timed] or None
+    segments = [Segment(text=w.text, start=w.start, end=w.end, speaker_id=w.speaker_id) for w in timed] or None
     metadata: dict[str, Any] = {"language_code": body.language_code, "language_probability": body.language_probability}
     if body.audio_duration_secs is not None:
         metadata["audio_duration_secs"] = body.audio_duration_secs
-    return TranscriptResult(text=body.text, segments=segments, metadata=metadata)
+    utterances = _utterances(body.words) if diarization else None
+    return TranscriptResult(text=body.text, segments=segments, utterances=utterances, metadata=metadata)
+
+
+def _utterances(words: list[_Word]) -> list[Utterance] | None:
+    """Group consecutive words by ``speaker_id`` in reading order (``diarization=True``).
+
+    A run the model did not attribute becomes an utterance with
+    ``speaker_id=None``. Spacing is glued onto the open utterance whatever
+    speaker id it carries (the model emits the line break before a new turn
+    under the new speaker) and stripped at both ends, so utterance texts do
+    not reconstruct ``text`` verbatim; ``audio_event`` items are dropped.
+    Times come from the first and last timed word and stay None without
+    ``with_timestamps``.
+    """
+    utterances: list[Utterance] = []
+    for w in words:
+        if w.type == "audio_event":
+            continue
+        if w.type == "spacing":
+            if utterances:
+                utterances[-1].text += w.text
+            continue
+        if utterances and utterances[-1].speaker_id == w.speaker_id:
+            current = utterances[-1]
+            current.text += w.text
+        else:
+            current = Utterance(speaker_id=w.speaker_id, text=w.text)
+            utterances.append(current)
+        if w.start is not None and w.end is not None:
+            if current.start is None:
+                current.start = w.start
+            current.end = w.end
+    for utterance in utterances:
+        utterance.text = utterance.text.strip()
+    return [u for u in utterances if u.text] or None
