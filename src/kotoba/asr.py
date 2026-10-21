@@ -218,12 +218,17 @@ class ASRClient:
 
         ``batch=False`` (default): one synchronous ``POST /v1/speech-to-text``
         with the transcript in the response — no job, no polling — served by
-        ``stt`` deployments (fal: ``kotoba-stt``). The server's
-        ``max_audio_seconds`` limit (120 s by default) applies, and the request
+        ``stt`` deployments (fal: ``kotoba-stt``). Audio longer than the server's
+        ``max_audio_seconds`` (120 s by default) is transcribed in chunks, up to
+        ``max_request_audio_seconds`` (24 h by default; ``diarization`` stays within
+        ``max_audio_seconds``), and the request
         runs under the client's per-request timeout (``KotobaClient(timeout=...)``),
         which long files or a cold deployment may need raised. ``language=None``
-        uses the server's configured language; ``keywords``, ``style_preference``
-        (kana) and ``with_timestamps`` must be enabled on the deployment.
+        uses the server's configured language. ``keywords`` are served by every ASR
+        deployment: the server biases decoding toward their spelling (blank terms are
+        dropped; the deployment's count and length limits are checked by the server).
+        ``style_preference`` (kana) and
+        ``with_timestamps`` must be enabled on the deployment.
         ``file_format="pcm_s16le_16"`` uploads raw 16-bit LE PCM at 16 kHz mono;
         ``"other"`` (default) is any encoded audio. ``diarization=True`` asks the
         deployment to attribute words to speakers: ``TranscriptResult.utterances``
@@ -566,12 +571,17 @@ class AsyncASRClient:
 
         ``batch=False`` (default): one synchronous ``POST /v1/speech-to-text``
         with the transcript in the response — no job, no polling — served by
-        ``stt`` deployments (fal: ``kotoba-stt``). The server's
-        ``max_audio_seconds`` limit (120 s by default) applies, and the request
+        ``stt`` deployments (fal: ``kotoba-stt``). Audio longer than the server's
+        ``max_audio_seconds`` (120 s by default) is transcribed in chunks, up to
+        ``max_request_audio_seconds`` (24 h by default; ``diarization`` stays within
+        ``max_audio_seconds``), and the request
         runs under the client's per-request timeout (``KotobaClient(timeout=...)``),
         which long files or a cold deployment may need raised. ``language=None``
-        uses the server's configured language; ``keywords``, ``style_preference``
-        (kana) and ``with_timestamps`` must be enabled on the deployment.
+        uses the server's configured language. ``keywords`` are served by every ASR
+        deployment: the server biases decoding toward their spelling (blank terms are
+        dropped; the deployment's count and length limits are checked by the server).
+        ``style_preference`` (kana) and
+        ``with_timestamps`` must be enabled on the deployment.
         ``file_format="pcm_s16le_16"`` uploads raw 16-bit LE PCM at 16 kHz mono;
         ``"other"`` (default) is any encoded audio. ``diarization=True`` asks the
         deployment to attribute words to speakers: ``TranscriptResult.utterances``

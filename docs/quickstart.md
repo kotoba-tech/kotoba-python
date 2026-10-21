@@ -70,7 +70,7 @@ Async version: replace `with` with `async with` and add `await` to each call. Se
 
 ASR has two transports. Pick by use case:
 
-- **REST** (`client.asr.transcribe`) — one `POST /v1/speech-to-text` per file to an `stt` deployment (fal: `kotoba-stt`). For files up to the server's limit (120 s by default); per-segment timestamps on request. Longer files go through `transcribe(..., batch=True)`, the asynchronous job API of self-hosted `streaming_stt` deployments.
+- **REST** (`client.asr.transcribe`) — one `POST /v1/speech-to-text` per file to an `stt` deployment (fal: `kotoba-stt`). Audio over the server's `max_audio_seconds` (120 s by default) is transcribed in chunks, up to `max_request_audio_seconds` (24 h by default); per-segment timestamps on request. Self-hosted `streaming_stt` deployments also offer `transcribe(..., batch=True)`, an asynchronous job API.
 - **WebSocket** (`client.asr.stream` / `client.asr.transcribe_stream`) — push PCM16 chunks, read partial transcripts as they arrive. Best for live mic / latency-sensitive pipelines.
 
 ### REST (file transcription)
@@ -104,7 +104,7 @@ for u in result.utterances:
 
 `transcribe()` accepts any audio format `soundfile` can decode (WAV / FLAC / OGG / MP3 / …) — the SDK uploads the file as-is and the server does the heavy lifting.
 
-`transcribe()` sends one `POST /v1/speech-to-text` to an `stt` deployment (fal: `kotoba-stt`), subject to the server's audio-length limit (120 s by default). Self-hosted `streaming_stt` deployments offer the asynchronous job API instead: `client.asr.transcribe("clip.mp3", batch=True)` submits the file and polls until the job finishes. On fal, only the default mode and the WebSocket `/v1/realtime` are available; the job API is not.
+`transcribe()` sends one `POST /v1/speech-to-text` to an `stt` deployment (fal: `kotoba-stt`), subject to the server's audio-length limit (`max_request_audio_seconds`, 24 h by default; longer than `max_audio_seconds`, 120 s, is transcribed in chunks). Self-hosted `streaming_stt` deployments offer the asynchronous job API instead: `client.asr.transcribe("clip.mp3", batch=True)` submits the file and polls until the job finishes. On fal, only the default mode and the WebSocket `/v1/realtime` are available; the job API is not.
 
 ### Streaming (live mic)
 
@@ -123,7 +123,8 @@ Optional knobs on both `stream(...)` and `transcribe_stream(...)`:
 
 - `language`: `"ja"` or `"en"`.
 - `sample_rate`: defaults to 24 kHz; the session resamples internally if your capture rate differs.
-- `style_preference`: `{"human_name": "kana"}` to transcribe personal names in katakana.
+- `keywords`: terms whose spelling the transcript should prefer (names, product words); the deployment sets the limits (1,000 terms of 64 characters on fal today).
+- `style_preference`: `{"human_name": "kana"}` to transcribe personal and place names in katakana.
 
 For `turn_detection` configuration, defaults, and completed-turn events, see the
 [SDK contract](../../../../.agent/sdd/kotoba-api-spec.md#python-sdk-streaming-asr).

@@ -32,6 +32,8 @@ from kotoba._ws_base import AsyncSession, SyncSession
 from kotoba.errors import APIError, ProtocolError
 from kotoba.models import ServerVAD, StreamEvent, TranscriptionStylePreference
 
+from .models import normalize_keywords
+
 AudioSource = Union[Iterable[bytes], AsyncIterable[bytes]]
 _FEED_STOP = object()
 
@@ -67,7 +69,7 @@ class AsyncASRSession(AsyncSession):
         super().__init__(url, api_key=api_key, connect_kwargs=connect_kwargs)
         self._language = language
         self._sample_rate = sample_rate
-        self._keywords = keywords
+        self._keywords = normalize_keywords(keywords)
         self._style_preference = TranscriptionStylePreference.coerce(style_preference)
         self._timestamps = timestamps
         self._turn_detection = (

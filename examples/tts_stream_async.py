@@ -1,10 +1,9 @@
 """Async streaming TTS — one-shot text in, audio chunks streamed out.
 
-Uses the low-level ``client.tts.stream(...)`` session so the WebSocket
-connection and ``open`` → ``session.created`` handshake complete *before*
-the timer starts. The reported TTFA is then the true model-side
-time-to-first-audio (server inference + one round-trip) rather than a
-cold-start metric that includes TCP/TLS setup.
+Sends the known text with ``initial_text`` to overlap the initial synthesis
+request with session setup. The timer starts before context entry, so the
+reported latency includes DNS, TCP/TLS, WebSocket upgrade and session setup.
+It measures first received audio, not playback onset or model-only latency.
 
 Usage:
     export KOTOBA_API_KEY=...
@@ -20,7 +19,6 @@ import time
 import kotoba
 from kotoba.audio import save_pcm_f32_as_wav
 
-
 SAMPLE_TEXT_JA = (
     "こんにちは、本日はお集まりいただき誠にありがとうございます。"
     "これから新しい音声合成エンジンのデモを行います。"
@@ -31,33 +29,28 @@ SAMPLE_TEXT_JA = (
 async def main() -> None:
     client = kotoba.AsyncKotobaClient()
 
-    # Pre-warm: TCP / TLS / WebSocket upgrade + `open` -> `session.created`
-    # all happen inside `__aenter__`. The TTFA timer below starts only
-    # after the session is ready, so it isolates server-side latency.
     t_connect = time.monotonic()
-    async with client.tts.stream(language="ja") as session:
+    async with client.tts.stream(
+        language="ja", speaker_id="male-01", initial_text=SAMPLE_TEXT_JA
+    ) as session:
         connect_ms = (time.monotonic() - t_connect) * 1000
-        print(f"[connect+handshake: {connect_ms:.0f} ms]")
+        print(f"[session ready: {connect_ms:.0f} ms since connection start]")
 
         chunks: list[bytes] = []
         first_audio_at: float | None = None
-        t0 = time.monotonic()
-        await session.synthesize(SAMPLE_TEXT_JA)
 
         async for event in session:
             if event.type == "audio_chunk" and event.audio:
-                now = time.monotonic() - t0
+                now = time.monotonic() - t_connect
                 if first_audio_at is None:
                     first_audio_at = now
-                    print(f"[{now*1000:7.0f} ms] TTFA = {first_audio_at*1000:.0f} ms")
+                    print(f"[{now*1000:7.0f} ms] connection-start to first audio = {first_audio_at*1000:.0f} ms")
                 chunks.append(event.audio)
                 print(f"[{now*1000:7.0f} ms] <- audio chunk: {len(event.audio)} bytes")
-            elif event.type == "done":
-                break
 
-    save_pcm_f32_as_wav("out_ja.wav", b"".join(chunks), sample_rate=24000)
+    save_pcm_f32_as_wav("out_ja.wav", b"".join(chunks), sample_rate=session.sample_rate)
     print(
-        f"[{(time.monotonic()-t0)*1000:7.0f} ms] wrote out_ja.wav "
+        f"[{(time.monotonic()-t_connect)*1000:7.0f} ms] wrote out_ja.wav "
         f"({sum(len(c) for c in chunks)} bytes)"
     )
 

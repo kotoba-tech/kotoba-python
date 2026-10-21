@@ -13,7 +13,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from kotoba.errors import ProtocolError
-from kotoba.models import Segment, TranscriptionStylePreference, TranscriptResult, Utterance
+from kotoba.models import Segment, TranscriptionStylePreference, TranscriptResult, Utterance, normalize_keywords
 
 # Relative to the session base (``KOTOBA_ASR_REST_URL``, which includes ``/v1``),
 # exactly like the job API's ``/transcription_jobs``.
@@ -53,8 +53,9 @@ class SpeechToTextRequest:
         # it with an error, and older deployments do not know the field.
         if diarization:
             form["diarization"] = "true"
-        if keywords:
-            form["keywords"] = list(keywords)
+        terms = normalize_keywords(keywords)
+        if terms:
+            form["keywords"] = terms
         preference = TranscriptionStylePreference.coerce(style_preference)
         if preference is not None and preference.human_name == "kana":
             form["kana"] = "true"

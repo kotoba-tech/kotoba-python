@@ -89,3 +89,16 @@ def test_style_preference_coerce_dict():
 def test_style_preference_coerce_rejects_invalid_dict():
     with pytest.raises(ValidationError):
         TranscriptionStylePreference.coerce({"human_name": "unknown"})
+
+
+def test_normalize_keywords_strips_and_drops_blanks_and_leaves_limits_to_the_server():
+    from kotoba.models import normalize_keywords
+
+    assert normalize_keywords(None) is None
+    assert normalize_keywords(["", "  "]) is None
+    assert normalize_keywords([" ウィケット ", "佐藤", ""]) == ["ウィケット", "佐藤"]
+    # The deployment's limits are the server's: no count or length check here.
+    assert len(normalize_keywords([f"k{i}" for i in range(1000)])) == 1000
+    assert normalize_keywords(["x" * 200]) == ["x" * 200]
+    with pytest.raises(ValueError, match="list of strings"):
+        normalize_keywords("ウィケット")

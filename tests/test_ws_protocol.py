@@ -49,6 +49,26 @@ async def test_asr_handshake_style_preference(style_preference, expected):
     assert "kana" not in transcription
 
 
+@pytest.mark.asyncio
+async def test_asr_handshake_carries_the_normalized_keywords():
+    session = AsyncASRSession("ws://unused", language="ja", keywords=[" ウィケット ", "", "佐藤"])
+    sent: list[dict] = []
+
+    async def _send(payload: dict) -> None:
+        sent.append(payload)
+        session._session_ready.set()
+
+    session._send_json = _send  # type: ignore[method-assign]
+    await session._handshake()
+    assert sent[0]["session"]["input_audio_transcription"]["keywords"] == ["ウィケット", "佐藤"]
+
+
+def test_asr_session_refuses_a_bare_string_as_keywords():
+    # Checked in the constructor: nothing is connected yet. Limits are the server's.
+    with pytest.raises(ValueError, match="list of strings"):
+        AsyncASRSession("ws://unused", language="ja", keywords="ウィケット")
+
+
 async def _capture_tts_open(**kwargs) -> dict:
     session = AsyncTTSSession("ws://unused", language="ja", speaker_id="s", **kwargs)
     sent: list[dict] = []
@@ -66,7 +86,7 @@ async def _capture_tts_open(**kwargs) -> dict:
 @pytest.mark.parametrize(
     "speaker_id,expected",
     [
-        pytest.param(None, "male-01", id="ja-default"),
+        pytest.param(None, None, id="server-default"),
         pytest.param("female-01", "female-01", id="explicit"),
     ],
 )
@@ -80,7 +100,9 @@ async def test_tts_handshake_speaker_id(speaker_id, expected):
 
     session._send_json = _send  # type: ignore[method-assign]
     await session._handshake()
-    assert sent[0]["speaker_id"] == expected
+    assert sent[0].get("speaker_id") == expected
+    if speaker_id is None:
+        assert "speaker_id" not in sent[0]
 
 
 @pytest.mark.asyncio
@@ -657,5 +679,28 @@ async def test_ws_connect_kwargs_authorization_header_replaces_the_sdks(addition
         with pytest.raises(APIError):
             await session.start()
         assert seen == {"authorization": ["Bearer mine"]}
+    finally:
+        stop()
+
+
+async def _closing_server(websocket):
+    """Read the client's first frame, then close with fal's invalid-key code."""
+    await websocket.recv()
+    await websocket.close(1008, "invalid key")
+
+
+async def test_server_close_code_reaches_the_error_without_a_deprecation_warning():
+    # The close code comes from the received close frame (`exc.rcvd`); the deprecated
+    # `exc.code` / `exc.reason` warn on websockets >= 13.1. Callers match on the text.
+    import warnings
+
+    url, stop = _serve_in_thread(_closing_server)
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            with pytest.raises(APIError, match="WebSocket closed unexpectedly: code=1008 reason=invalid key"):
+                async with AsyncTTSSession(url, language="ja", speaker_id="ja-man-1"):
+                    pass
+        assert not [w for w in caught if issubclass(w.category, DeprecationWarning)], [str(w.message) for w in caught]
     finally:
         stop()

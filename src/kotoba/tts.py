@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Any, AsyncIterator, Iterator
 
 from kotoba._ws_tts import AsyncTTSSession, TTSSession
-from kotoba.models import AudioResult
+from kotoba.models import AudioResult, VoiceSettings
 from kotoba.routing import endpoint_for
 
 
@@ -56,8 +56,20 @@ class TTSClient:
         spk_ref_audio_tokens: Any = None,
         audio_format: str | None = None,
         sample_rate: int | None = None,
+        initial_text: str | None = None,
+        initial_request_in_upgrade: bool = False,
+        with_timestamps: bool = False,
+        voice_settings: VoiceSettings | None = None,
         url: str | None = None,
     ) -> TTSSession:
+        """Open a ready session; optionally send initial_text during setup.
+
+        With initial_text, iterate its audio before sending another request.
+        with_timestamps requests alignments in audio_chunk event metadata.
+        voice_settings (VoiceSettings: speed and volume multipliers, pitch in
+        semitones) is the session default; session.synthesize(voice_settings=...)
+        overrides it per response.
+        """
         return TTSSession(
             _resolve_url(url, language),
             language=language,
@@ -65,6 +77,10 @@ class TTSClient:
             spk_ref_audio_tokens=spk_ref_audio_tokens,
             audio_format=audio_format,
             sample_rate=sample_rate,
+            with_timestamps=with_timestamps,
+            voice_settings=voice_settings,
+            initial_text=initial_text,
+            initial_request_in_upgrade=initial_request_in_upgrade,
             api_key=self._api_key,
         )
 
@@ -77,20 +93,26 @@ class TTSClient:
         spk_ref_audio_tokens: Any = None,
         audio_format: str | None = None,
         sample_rate: int | None = None,
+        initial_request_in_upgrade: bool = False,
+        voice_settings: VoiceSettings | None = None,
         url: str | None = None,
     ) -> Iterator[bytes]:
         """Yield PCM audio chunks for ``text`` as the server emits them."""
 
+        if text is None:
+            raise ValueError("synthesize() requires a non-empty string")
         session = self.stream(
             language=language,
             speaker_id=speaker_id,
             spk_ref_audio_tokens=spk_ref_audio_tokens,
             audio_format=audio_format,
             sample_rate=sample_rate,
+            initial_text=text,
+            initial_request_in_upgrade=initial_request_in_upgrade,
+            voice_settings=voice_settings,
             url=url,
         )
         with session:
-            session.synthesize(text)
             for event in session:
                 if event.type == "audio_chunk" and event.audio:
                     yield event.audio
@@ -105,20 +127,26 @@ class TTSClient:
         speaker_id: str | None = None,
         audio_format: str | None = None,
         sample_rate: int | None = None,
+        initial_request_in_upgrade: bool = False,
+        voice_settings: VoiceSettings | None = None,
         url: str | None = None,
     ) -> AudioResult:
         chunks: list[bytes] = []
         negotiated_rate = 24000
         negotiated_format = "pcm_f32"
+        if text is None:
+            raise ValueError("synthesize() requires a non-empty string")
         session = self.stream(
             language=language,
             speaker_id=speaker_id,
             audio_format=audio_format,
             sample_rate=sample_rate,
+            initial_text=text,
+            initial_request_in_upgrade=initial_request_in_upgrade,
+            voice_settings=voice_settings,
             url=url,
         )
         with session:
-            session.synthesize(text)
             negotiated_rate = session.sample_rate
             negotiated_format = session.audio_format
             for event in session:
@@ -148,8 +176,20 @@ class AsyncTTSClient:
         spk_ref_audio_tokens: Any = None,
         audio_format: str | None = None,
         sample_rate: int | None = None,
+        initial_text: str | None = None,
+        initial_request_in_upgrade: bool = False,
+        with_timestamps: bool = False,
+        voice_settings: VoiceSettings | None = None,
         url: str | None = None,
     ) -> AsyncTTSSession:
+        """Open a ready session; optionally send initial_text during setup.
+
+        With initial_text, iterate its audio before sending another request.
+        with_timestamps requests alignments in audio_chunk event metadata.
+        voice_settings (VoiceSettings: speed and volume multipliers, pitch in
+        semitones) is the session default; session.synthesize(voice_settings=...)
+        overrides it per response.
+        """
         return AsyncTTSSession(
             _resolve_url(url, language),
             language=language,
@@ -157,6 +197,10 @@ class AsyncTTSClient:
             spk_ref_audio_tokens=spk_ref_audio_tokens,
             audio_format=audio_format,
             sample_rate=sample_rate,
+            with_timestamps=with_timestamps,
+            voice_settings=voice_settings,
+            initial_text=initial_text,
+            initial_request_in_upgrade=initial_request_in_upgrade,
             api_key=self._api_key,
         )
 
@@ -169,19 +213,25 @@ class AsyncTTSClient:
         spk_ref_audio_tokens: Any = None,
         audio_format: str | None = None,
         sample_rate: int | None = None,
+        initial_request_in_upgrade: bool = False,
+        voice_settings: VoiceSettings | None = None,
         url: str | None = None,
     ) -> AsyncIterator[bytes]:
         """Yield PCM audio chunks for ``text`` as the server emits them."""
 
+        if text is None:
+            raise ValueError("synthesize() requires a non-empty string")
         async with self.stream(
             language=language,
             speaker_id=speaker_id,
             spk_ref_audio_tokens=spk_ref_audio_tokens,
             audio_format=audio_format,
             sample_rate=sample_rate,
+            initial_text=text,
+            initial_request_in_upgrade=initial_request_in_upgrade,
+            voice_settings=voice_settings,
             url=url,
         ) as session:
-            await session.synthesize(text)
             async for event in session:
                 if event.type == "audio_chunk" and event.audio:
                     yield event.audio
@@ -196,19 +246,25 @@ class AsyncTTSClient:
         speaker_id: str | None = None,
         audio_format: str | None = None,
         sample_rate: int | None = None,
+        initial_request_in_upgrade: bool = False,
+        voice_settings: VoiceSettings | None = None,
         url: str | None = None,
     ) -> AudioResult:
         chunks: list[bytes] = []
         negotiated_rate = 24000
         negotiated_format = "pcm_f32"
+        if text is None:
+            raise ValueError("synthesize() requires a non-empty string")
         async with self.stream(
             language=language,
             speaker_id=speaker_id,
             audio_format=audio_format,
             sample_rate=sample_rate,
+            initial_text=text,
+            initial_request_in_upgrade=initial_request_in_upgrade,
+            voice_settings=voice_settings,
             url=url,
         ) as session:
-            await session.synthesize(text)
             negotiated_rate = session.sample_rate
             negotiated_format = session.audio_format
             async for event in session:

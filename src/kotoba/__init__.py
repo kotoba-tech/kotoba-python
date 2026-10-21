@@ -25,6 +25,7 @@ from kotoba.models import (
     StreamEvent,
     TranscriptResult,
     Utterance,
+    VoiceSettings,
 )
 from kotoba.routing import endpoint_for, register_endpoint
 from kotoba.s2st import AsyncS2STClient, S2STClient
@@ -54,6 +55,7 @@ __all__ = [
     "SessionConfig",
     "ServerVAD",
     "StreamEvent",
+    "VoiceSettings",
     # Errors
     "KotobaError",
     "APIError",

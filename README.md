@@ -106,6 +106,22 @@ ASR, TTS, and S2ST are all streaming-first. Audio chunks and partial transcripts
 
 ### Streaming output
 
+For text known before connecting, `synthesize_stream(text)` sends the first
+request during session setup. Manual sessions can do the same with
+`stream(initial_text=text, ...)`; consume that response before sending another
+text. See [the timing example](examples/tts_stream_async.py) for latency measured
+from connection start to first audio. `synthesize()` returns only after the full
+audio has been collected and the connection has closed, so its return time is
+not TTFA.
+
+On a server supporting `X-Kotoba-TTS-Init`, add
+`initial_request_in_upgrade=True` to send the initial text in the WebSocket
+Upgrade request itself. With manual `stream()`, also supply `initial_text`.
+This opt-in requires server acknowledgement, does not retry/fall back, and
+rejects an initial header exceeding 8,192 bytes; leave it disabled for older
+servers or larger input. Audio still streams over WebSocket. The header
+contains input text and must not be logged by gateways or applications.
+
 ASR streams transcript deltas as audio arrives; TTS streams audio chunks
 as the server produces them from a single text prompt. ASR accepts a
 generator of PCM16 chunks on the input side (feed + drain run
@@ -130,16 +146,68 @@ import asyncio, kotoba
 async def main():
     client = kotoba.AsyncKotobaClient()
 
+    # Reuse one connection for consecutive utterances.
     async with client.tts.stream(language="ja") as session:
-        await session.synthesize("こんにちは。本日はよろしくお願いします。")
-
-        async for event in session:
-            if event.type == "audio_chunk":
-                await play(event.audio)
-            elif event.type == "done":
-                break
+        for text in ["こんにちは。", "本日はよろしくお願いします。"]:
+            await session.synthesize(text)
+            async for event in session:
+                if event.type == "audio_chunk" and event.audio:
+                    await play(event.audio)
 
 asyncio.run(main())
+```
+
+If the first text is already known, use
+`client.tts.stream(language="ja", initial_text="こんにちは。")` to send it during
+session setup. Iterate that response before calling `session.synthesize()` for
+another utterance; do not send the initial text twice. Always exhaust each
+response iterator before starting the next utterance on the same session.
+`synthesize_stream(text)` and `synthesize(text)` use this setup optimization
+automatically. `synthesize()` still waits for the entire audio and connection
+cleanup; use streaming for time to first audio.
+
+Connections can close because of server idle limits, network failures, or gateway
+maintenance. The SDK sends WebSocket pings, but these do not extend an
+application-level idle timeout. Open a new context after a disconnect; the SDK
+does not reconnect or replay synthesis requests automatically. If audio was
+already played, blindly replaying the text can repeat speech.
+
+WSS sessions reuse verified TLS configuration, not live connections. Set custom
+trust-store environment variables before the process's first WSS connection.
+
+On TTS servers supporting timestamps, use the event stream to request alignments:
+
+```python
+async with client.tts.stream(language="ja", with_timestamps=True) as session:
+    await session.synthesize("こんにちは。")
+    async for event in session:
+        if event.type == "audio_chunk":
+            for alignment in event.metadata.get("alignments", []):
+                print(alignment["start"], alignment["end"], alignment["text"])
+            if event.audio:
+                await play(event.audio)
+```
+
+`with_timestamps` defaults to `False` and also applies to `initial_text`, including
+`initial_request_in_upgrade=True`. Each `session.synthesize()` can override it
+with `with_timestamps=True` or `False`; omitting it or passing `None` uses the
+session default. The sync event stream has the same options. Alignments may be
+absent from a chunk. The audio-only `synthesize_stream()` and `synthesize()`
+helpers do not expose alignment metadata.
+
+`voice_settings` (`kotoba.VoiceSettings`: `speed` / `volume` multipliers, `pitch` in semitones) set on `stream(voice_settings=...)` is the
+session default; `session.synthesize(..., voice_settings=...)` overrides it for one response.
+`synthesize_stream()` and `synthesize()` accept it too. Ranges, effects and the override rule
+are in the [API contract](../../../.agent/sdd/kotoba-api-spec.md#tts-voice-settings-v2ttsws-v2input-streaming-ttsws).
+
+```python
+async with client.tts.stream(language="ja", voice_settings={"speed": 1.2, "volume": 0.8}) as session:
+    # The second response is also 2 semitones lower; both keep speed 1.2 and volume 0.8.
+    for text, voice in [("いらっしゃいませ。", None), ("少々お待ちください。", {"pitch": -2})]:
+        await session.synthesize(text, voice_settings=voice)
+        async for event in session:
+            if event.type == "audio_chunk" and event.audio:
+                await play(event.audio)
 ```
 
 ### Sync (notebooks, scripts)
@@ -231,7 +299,7 @@ transcribe(
     with_timestamps: bool = False,      # per-segment timestamps (batch=False: must be enabled on the deployment)
     diarization: bool = False,          # batch=False only: who said what in result.utterances; speaker_id on segments
     style_preference: TranscriptionStylePreference | dict | None = None,  # {"human_name": "kana"}
-    keywords: list[str] | None = None,  # legacy hotword biasing; not supported on current deployments (rejected with 400)
+    keywords: list[str] | None = None,  # terms (names, product words) whose spelling the transcript should prefer; served by every ASR deployment (blank terms dropped; the server enforces the deployment's limits)
     file_format: "other" | "pcm_s16le_16" | None = None,  # batch=False only; raw 16 kHz mono int16, or any encoded audio
     poll_interval: float | None = None,     # batch=True only (default 1.0 s)
     poll_backoff: float | None = None,      # batch=True only (default 1.5, multiplied each poll)
@@ -240,7 +308,7 @@ transcribe(
 ) -> TranscriptResult
 ```
 
-`batch=False` (default) uploads the file in a single synchronous `POST /v1/speech-to-text` and returns the transcript — no job, no polling — for `stt` deployments (on fal `kotoba-stt`). The server's `max_audio_seconds` limit (120 s by default) applies; longer audio, and options the deployment has not enabled, come back as a `ProtocolError` (HTTP 400). Words with timings map to `TranscriptResult.segments`; `language_code` / `language_probability` / `audio_duration_secs` are in `TranscriptResult.metadata`. `diarization=True` returns `TranscriptResult.utterances`, the runs of consecutive words by speaker in reading order (`speaker_id`, `text`, and `start` / `end` when `with_timestamps=True` is also set; `speaker_id` is `None` for a run the model did not attribute), and sets `speaker_id` on each timed segment. Only deployments whose model carries speaker tokens support it (on fal, `kotoba-stt` once it serves the diarized model); a deployment without them rejects the request — `ProtocolError` (HTTP 400) when it declares so, `APIError` (HTTP 503) on older deployments.
+`batch=False` (default) uploads the file in a single synchronous `POST /v1/speech-to-text` and returns the transcript — no job, no polling — for `stt` deployments (on fal `kotoba-stt`). Audio longer than the server's `max_audio_seconds` (120 s by default) is transcribed in chunks, up to its `max_request_audio_seconds` (24 h by default); `diarization=True` stays within `max_audio_seconds`. Longer audio, and options the deployment has not enabled, come back as a `ProtocolError` (HTTP 400). A file over the server's upload limit (`max_upload_mib`, 500 MiB by default; compress long or multichannel WAV) comes back as a `ProtocolError` (HTTP 413). Words with timings map to `TranscriptResult.segments`; `language_code` / `language_probability` / `audio_duration_secs` are in `TranscriptResult.metadata`. `diarization=True` returns `TranscriptResult.utterances`, the runs of consecutive words by speaker in reading order (`speaker_id`, `text`, and `start` / `end` when `with_timestamps=True` is also set; `speaker_id` is `None` for a run the model did not attribute), and sets `speaker_id` on each timed segment. Only deployments whose model carries speaker tokens support it (on fal, `kotoba-stt` once it serves the diarized model); a deployment without them rejects the request — `ProtocolError` (HTTP 400) when it declares so, `APIError` (HTTP 503) on older deployments.
 
 `batch=True` POSTs the file to `/transcription_jobs`, polls `GET /transcription_jobs/{id}` with exponential backoff and returns the final transcript (`job_id` set; `segments` when `with_timestamps=True` and the deployment produced timings, else `None`). Raises `TranscriptionError` on server-reported failure, `TimeoutError` if the deadline elapses. Self-hosted `streaming_stt` deployments only.
 
@@ -276,7 +344,7 @@ event semantics are defined in the
 [SDK contract](../../../.agent/sdd/kotoba-api-spec.md#python-sdk-streaming-asr).
 
 ```python
-client.tts.stream(language="ja", speaker_id=..., url=...)  -> TTSSession
+client.tts.stream(language="ja", speaker_id=..., initial_text=..., with_timestamps=False, url=...)  -> TTSSession
 client.tts.synthesize_stream(text, ...)                    -> Iterator[bytes]
 client.tts.synthesize(text, ...)                           -> AudioResult
 
@@ -286,7 +354,14 @@ client.s2st.translate(path, src="en", tgt="ja")  -> S2STResult
 
 URLs resolve from the per-service env vars (`KOTOBA_ASR_URL`, `KOTOBA_TTS_URL`, `KOTOBA_S2ST_URL`) or the matching `KotobaClient(...)` kwargs, then from any language-specific `register_endpoint(...)` route, unless passed explicitly with `url=`.
 
-Streaming STT takes the same recognition options as `transcribe()`: `style_preference={"human_name": "kana"}` (personal names in katakana) and the legacy `keywords` (not supported on current deployments). Both are sent once in the session-opening `transcription_session.update` message and apply to the whole session. Note that `/v1/realtime` does not reject options a deployment has not enabled; keyword biasing that is off on the worker is silently ignored there, whereas `POST /v1/speech-to-text` answers 400.
+Streaming STT takes the same recognition options as `transcribe()`: `keywords` (terms whose spelling the transcript should prefer; served by every ASR deployment, on fal `kotoba-streaming-stt` included) and `style_preference={"human_name": "kana"}` (personal and place names in katakana; Japanese deployments that enable it). Both are sent once in the session update, so they apply to the whole session:
+
+```python
+with client.asr.stream(language="ja", keywords=["ウィケット", "佐藤"], style_preference={"human_name": "kana"}) as session:
+    ...
+```
+
+Blank terms are dropped. The deployment's limits (1,000 terms of 64 characters on fal today) are enforced by the server, which answers `invalid_parameters`.
 
 ### Exceptions
 

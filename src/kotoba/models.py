@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Literal, Mapping
+from typing import Any, Literal, Mapping, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
@@ -29,6 +29,23 @@ class ServerVAD(BaseModel):
 
     type: Literal["server_vad"] = "server_vad"
     silence_duration_ms: StrictInt | None = Field(default=800, ge=0)
+
+
+def normalize_keywords(keywords: list[str] | None) -> list[str] | None:
+    """Strip the terms and drop blank ones; ``None`` or an all-blank list means no keywords.
+
+    The count and length limits belong to the deployment and are enforced by the
+    server (it answers ``invalid_parameters``), so a server-side change needs no
+    SDK release. A bare string is refused here: it would otherwise be sent as a
+    list of characters.
+    """
+
+    if keywords is None:
+        return None
+    if isinstance(keywords, str) or not all(isinstance(term, str) for term in keywords):
+        raise ValueError("keywords must be a list of strings")
+    terms = [term.strip() for term in keywords if term.strip()]
+    return terms or None
 
 
 class TranscriptionStylePreference(BaseModel):
@@ -83,6 +100,17 @@ class SessionConfig(BaseModel):
     src_language: str | None = None
     tgt_language: str | None = None
     speaker_id: str | None = None
+
+
+class VoiceSettings(TypedDict, total=False):
+    """TTS ``voice_settings``: ``speed`` and ``volume`` multipliers, ``pitch`` in semitones.
+
+    For static checking only; the server owns the ranges and rejects values outside them.
+    """
+
+    speed: float
+    pitch: float
+    volume: float
 
 
 class StreamEvent(BaseModel):

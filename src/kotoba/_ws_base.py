@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import ssl
 import threading
 from contextlib import suppress
 from typing import Any, AsyncIterator, Iterator
@@ -35,6 +36,18 @@ from kotoba.errors import APIError, AuthError, KotobaError, ProtocolError, Timeo
 from kotoba.models import StreamEvent
 
 _DONE_SENTINEL: StreamEvent | None = None  # `None` is the "no more events" marker
+_DEFAULT_SSL_CONTEXT: ssl.SSLContext | None = None
+_SSL_CONTEXT_LOCK = threading.Lock()
+
+
+def _default_ssl_context() -> ssl.SSLContext:
+    # Loading trust roots is synchronous. Share the read-only configuration,
+    # including across sync-session threads, without sharing live connections.
+    global _DEFAULT_SSL_CONTEXT
+    with _SSL_CONTEXT_LOCK:
+        if _DEFAULT_SSL_CONTEXT is None:
+            _DEFAULT_SSL_CONTEXT = ssl.create_default_context()
+        return _DEFAULT_SSL_CONTEXT
 
 
 class AsyncSession:
@@ -54,8 +67,9 @@ class AsyncSession:
         self._url = url
         self._api_key = api_key
         self._connect_kwargs = connect_kwargs or {}
+        self._handshake_headers: dict[str, str] = {}
         self._ws: websockets.ClientConnection | None = None
-        self._events: asyncio.Queue[StreamEvent | None] = asyncio.Queue()
+        self._events: asyncio.Queue[StreamEvent | KotobaError | None] = asyncio.Queue()
         self._receiver_task: asyncio.Task[None] | None = None
         self._error: BaseException | None = None
         self._closed = False
@@ -85,9 +99,14 @@ class AsyncSession:
         for name, value in auth_headers(self._api_key, self._url).items():
             if name not in headers:
                 headers[name] = value
+        for name, value in self._handshake_headers.items():
+            if name not in headers:
+                headers[name] = value
         connect_kwargs["additional_headers"] = headers
 
         try:
+            if self._url.lower().startswith("wss://") and "ssl" not in connect_kwargs:
+                connect_kwargs["ssl"] = _default_ssl_context()
             self._ws = await websockets.connect(self._url, **connect_kwargs)
         except websockets.exceptions.InvalidStatus as exc:
             status = getattr(exc, "response", None)
@@ -173,6 +192,8 @@ class AsyncSession:
 
     async def __anext__(self) -> StreamEvent:
         event = await self._events.get()
+        if isinstance(event, KotobaError):
+            raise event
         if event is _DONE_SENTINEL:
             if self._error is not None:
                 raise self._error
@@ -201,6 +222,10 @@ class AsyncSession:
 
     async def _emit_done(self) -> None:
         await self._events.put(_DONE_SENTINEL)
+
+    async def _emit_error(self, error: KotobaError) -> None:
+        """End the current iteration with ``error``; the receiver and session stay usable."""
+        await self._events.put(error)
 
     # -- internals ---------------------------------------------------------
 
@@ -231,9 +256,14 @@ class AsyncSession:
                     await self._emit_done()
                     return
         except websockets.exceptions.ConnectionClosed as exc:
-            if exc.code not in (1000, 1001):
+            # The received close frame; ``exc.code`` / ``exc.reason`` are deprecated
+            # since websockets 13.1. No frame (abnormal closure) reads as 1006, as before.
+            rcvd = exc.rcvd
+            code = rcvd.code if rcvd is not None else 1006
+            reason = rcvd.reason if rcvd is not None else ""
+            if code not in (1000, 1001):
                 self._error = APIError(
-                    f"WebSocket closed unexpectedly: code={exc.code} reason={exc.reason}"
+                    f"WebSocket closed unexpectedly: code={code} reason={reason}"
                 )
         except Exception as exc:  # pragma: no cover - defensive
             self._error = APIError(f"Receiver loop crashed: {exc!r}")
@@ -253,7 +283,14 @@ class SyncSession:
 
     def __enter__(self):
         self._start_loop()
-        self._run(self._async.start())
+        try:
+            self._run(self._async.start())
+        except BaseException:
+            try:
+                self._run(self._async.close())
+            finally:
+                self._stop_loop()
+            raise
         return self
 
     def __exit__(self, exc_type, exc, tb):
@@ -271,7 +308,7 @@ class SyncSession:
         try:
             return self._run(self._async.__anext__())
         except StopAsyncIteration:
-            raise StopIteration
+            raise StopIteration from None
 
     # -- internals ---------------------------------------------------------
 
