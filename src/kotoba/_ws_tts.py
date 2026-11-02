@@ -282,8 +282,9 @@ class AsyncTTSSession(AsyncSession):
                 code=str(payload.get("code", "error")),
                 payload=payload,
             )
-            if error.code == "invalid_request":
-                # The server rejected only that request (e.g. voice_settings out of range) and keeps the connection.
+            if error.code == "invalid_request" and self._session_ready.is_set():
+                # Only an initialized session can recover from a rejected request.
+                # Before session.created, fail start() with the original error.
                 await self._emit_error(error)
                 return
             raise error

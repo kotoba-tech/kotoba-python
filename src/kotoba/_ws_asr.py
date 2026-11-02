@@ -20,6 +20,15 @@ partials, the whole turn's span on finals. ``audio_processed_ms`` is the resume
 point: audio before it is fully transcribed within the calibrated guard (later
 text arrives with ``start_ms`` moved up to it), so a client resends from there
 after a disconnect.
+
+With ``diarization=True`` the session sends ``session.diarization: true``. Every
+non-blank delta then carries a provisional ``speaker_id`` (the speaker talking
+when the text was sent; a whitespace-only delta has none) and every turn
+completion the settled one; the SDK
+exposes both as ``StreamEvent.speaker_id``. Unless ``turn_detection`` is given,
+the server applies ``semantic_vad`` (eagerness medium), because only
+completions carry the settled speaker; ``turn_detection=False`` keeps the
+provisional speakers only.
 """
 
 from __future__ import annotations
@@ -30,7 +39,7 @@ from typing import Any, AsyncIterable, Iterable, Literal, Union
 
 from kotoba._ws_base import AsyncSession, SyncSession
 from kotoba.errors import APIError, ProtocolError
-from kotoba.models import ServerVAD, StreamEvent, TranscriptionStylePreference
+from kotoba.models import SemanticVAD, ServerVAD, StreamEvent, TranscriptionStylePreference, coerce_turn_detection
 
 from .models import normalize_keywords
 
@@ -61,8 +70,9 @@ class AsyncASRSession(AsyncSession):
         sample_rate: int = 24000,
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
-        turn_detection: ServerVAD | dict | Literal[False] | None = None,
+        turn_detection: ServerVAD | SemanticVAD | dict | Literal[False] | None = None,
         timestamps: bool = False,
+        diarization: bool = False,
         api_key: str | None = None,
         connect_kwargs: dict[str, Any] | None = None,
     ) -> None:
@@ -70,11 +80,12 @@ class AsyncASRSession(AsyncSession):
         self._language = language
         self._sample_rate = sample_rate
         self._keywords = normalize_keywords(keywords)
+        self._diarization = diarization
         self._style_preference = TranscriptionStylePreference.coerce(style_preference)
         self._timestamps = timestamps
         self._turn_detection = (
             turn_detection if turn_detection is None or turn_detection is False
-            else ServerVAD.model_validate(turn_detection)
+            else coerce_turn_detection(turn_detection)
         )
         self._session_ready = asyncio.Event()
         self._event_counter = 0
@@ -103,6 +114,8 @@ class AsyncASRSession(AsyncSession):
                 update["session"]["input_audio_transcription"]["style_preference"] = style
         if self._timestamps:
             update["session"]["input_audio_transcription"]["timestamps"] = True
+        if self._diarization:
+            update["session"]["diarization"] = True
         if self._turn_detection is not None:
             update["session"]["turn_detection"] = (
                 False if self._turn_detection is False
@@ -174,6 +187,16 @@ class AsyncASRSession(AsyncSession):
             return
 
         if msg_type == "transcription_session.updated":
+            if self._diarization and (payload.get("session") or {}).get("diarization") is not True:
+                # A server without diarization support ignores the unknown field and
+                # acknowledges a session that would never carry a speaker.
+                raise ProtocolError(
+                    "This deployment does not diarize streaming sessions: its session "
+                    "acknowledgement does not enable diarization. Retry without diarization.",
+                    code="invalid_parameters",
+                    param="session.diarization",
+                    payload=payload,
+                )
             self._session_ready.set()
             await self._emit(StreamEvent(type="session_ready", metadata=payload))
             return
@@ -186,7 +209,12 @@ class AsyncASRSession(AsyncSession):
             delta = payload.get("delta", "")
             if delta:
                 await self._emit(
-                    StreamEvent(type="partial_transcript", text=delta, metadata=payload)
+                    StreamEvent(
+                        type="partial_transcript",
+                        text=delta,
+                        speaker_id=payload.get("speaker_id"),
+                        metadata=payload,
+                    )
                 )
             return
 
@@ -195,7 +223,10 @@ class AsyncASRSession(AsyncSession):
             if transcript:
                 await self._emit(
                     StreamEvent(
-                        type="final_transcript", text=transcript, metadata=payload
+                        type="final_transcript",
+                        text=transcript,
+                        speaker_id=payload.get("speaker_id"),
+                        metadata=payload,
                     )
                 )
             return
@@ -209,9 +240,18 @@ class AsyncASRSession(AsyncSession):
         if msg_type == "error":
             err = payload.get("error", payload)
             code = err.get("code") if isinstance(err, dict) else None
+            param = err.get("param") if isinstance(err, dict) else None
+            if code == "invalid_parameters" and param == "session.diarization":
+                message = (
+                    "This deployment cannot diarize the session; retry without diarization. "
+                    f"Server message: {err.get('message', '')}"
+                )
+            else:
+                message = f"ASR server error: {err}"
             raise ProtocolError(
-                f"ASR server error: {err}",
+                message,
                 code=str(code) if code is not None else "error",
+                param=param,
                 payload=payload,
             )
 
@@ -227,8 +267,9 @@ class ASRSession(SyncSession):
         sample_rate: int = 24000,
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
-        turn_detection: ServerVAD | dict | Literal[False] | None = None,
+        turn_detection: ServerVAD | SemanticVAD | dict | Literal[False] | None = None,
         timestamps: bool = False,
+        diarization: bool = False,
         api_key: str | None = None,
     ) -> None:
         super().__init__(
@@ -240,6 +281,7 @@ class ASRSession(SyncSession):
                 style_preference=style_preference,
                 turn_detection=turn_detection,
                 timestamps=timestamps,
+                diarization=diarization,
                 api_key=api_key,
             )
         )

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.3.1
+
+- STT: streaming speaker diarization. `stream()` / `transcribe_stream()` take
+  `diarization=True` (sends `session.diarization: true`; deployments with a
+  diarization service only). `StreamEvent.speaker_id` is the provisional
+  speaker on `partial_transcript` (`None` on a whitespace-only partial) and the
+  settled one on `final_transcript`
+  (`speaker_1` … `speaker_8`, stable within one connection). Unless
+  `turn_detection` is given the server applies `semantic_vad`. With
+  `diarization=True`, `transcribe_stream()` yields those `StreamEvent`s instead
+  of strings.
+- STT: `diarization=True` combines with `keywords`; a deployment that cannot
+  diarize the session raises `kotoba.ProtocolError` with
+  `code="invalid_parameters"` and `param="session.diarization"` when the
+  session starts, including a server without diarization support, whose
+  acknowledgement does not enable it.
+- `ProtocolError` has a `param` attribute: the error frame's `param` (the
+  rejected field), or `None`.
+- STT: `transcribe_stream()` takes `timestamps` like `stream()`.
+
 ## 0.3.0
 
 - STT: `keywords` are served by every Kotoba ASR deployment, the streaming
@@ -26,3 +46,6 @@
   received close frame; the deprecated `ConnectionClosed.code` / `.reason`
   (websockets 13.1+) no longer emit a `DeprecationWarning`. The
   `WebSocket closed unexpectedly: code=… reason=…` message is unchanged.
+- STT: `turn_detection` accepts `kotoba.SemanticVAD(eagerness=...)` (or a dict
+  with `"type": "semantic_vad"`), which completes a turn soon after the model
+  ends a sentence and waits longer inside an unfinished one.

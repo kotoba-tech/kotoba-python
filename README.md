@@ -256,6 +256,7 @@ Naming: `_sync` / `_async` is the client class (`KotobaClient` vs `AsyncKotobaCl
 | `asr_transcribe_batch_sync.py` | Job API, `transcribe(..., batch=True)` with `with_timestamps=True` (self-hosted `streaming_stt` only) | `KOTOBA_API_KEY`, `KOTOBA_ASR_REST_URL` |
 | `asr_transcribe_batch_async.py` | Same, async with the `AsyncKotobaClient` context manager | `KOTOBA_API_KEY`, `KOTOBA_ASR_REST_URL` |
 | `asr_stream_async.py` | Live ASR via `transcribe_stream(generator)` with first-token-latency measurement | `KOTOBA_API_KEY`, `KOTOBA_ASR_URL` |
+| `asr_stream_diarization_async.py` | Live ASR with `diarization=True`: speaker per transcript event, with turn spans | `KOTOBA_API_KEY`, `KOTOBA_ASR_URL` |
 | `tts_synthesize_sync.py` | One-shot TTS with explicit `speaker_id` | `KOTOBA_API_KEY`, `KOTOBA_TTS_URL` |
 | `tts_stream_async.py` | One-shot text in → streamed audio chunks with first-audio-latency timing | `KOTOBA_API_KEY`, `KOTOBA_TTS_URL` |
 | `s2st_stream_async.py` | File in → live transcript + translated WAV out | `KOTOBA_API_KEY`, `KOTOBA_S2ST_URL` |
@@ -363,6 +364,19 @@ with client.asr.stream(language="ja", keywords=["ウィケット", "佐藤"], st
 
 Blank terms are dropped. The deployment's limits (1,000 terms of 64 characters on fal today) are enforced by the server, which answers `invalid_parameters`.
 
+#### Speaker diarization (streaming)
+
+`diarization=True` asks a deployment that runs a diarization service to attribute the live transcript to speakers; `transcribe_stream()` then yields `StreamEvent`s with `speaker_id` instead of strings. Provisional and settled speakers, the turn-detection default and the errors are defined in the [SDK contract](../../../.agent/sdd/kotoba-api-spec.md#python-sdk-streaming-asr).
+
+```python
+for event in client.asr.transcribe_stream(mic_chunks(), language="ja", diarization=True, timestamps=True):
+    if event.type == "partial_transcript":
+        # A whitespace-only partial (the space between words) has no speaker.
+        print(f"[{event.speaker_id}?] {event.text}" if event.speaker_id else event.text, end="", flush=True)
+    else:  # final_transcript
+        print(f"\n{event.speaker_id} {event.metadata['start_ms']}-{event.metadata['end_ms']} ms: {event.text.strip()}")
+```
+
 ### Exceptions
 
 All inherit from `kotoba.KotobaError`:
@@ -370,7 +384,7 @@ All inherit from `kotoba.KotobaError`:
 | Exception | When |
 |---|---|
 | `AuthError` | HTTP 401/403, WS auth rejection |
-| `ProtocolError` | Other 4xx, a server `error` frame violating the contract, or a 200 whose body does not match the `/speech-to-text` response contract (`status_code=200`) |
+| `ProtocolError` | Other 4xx, a server `error` frame violating the contract, or a 200 whose body does not match the `/speech-to-text` response contract (`status_code=200`). `code` and `param` mirror the error frame; a streaming deployment that cannot diarize the session gives `code="invalid_parameters"`, `param="session.diarization"` |
 | `APIError` | Transport error, 5xx (after GET retries), or an unexpected redirect |
 | `TimeoutError` | HTTP timeout, WS handshake timeout, or `transcribe(batch=True)` polling deadline exceeded |
 | `JobNotFoundError` | GET returned 404 |

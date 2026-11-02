@@ -11,6 +11,8 @@ Two transports exposed through the same facade:
 - **WebSocket** (``stream`` / ``transcribe_stream``): ``/v1/realtime`` on
   ``streaming_stt`` deployments (fal: ``kotoba-streaming-stt``); push audio
   chunks, receive partial transcripts. Best for live / latency-sensitive use.
+  ``diarization=True`` adds a speaker to every transcript event on deployments
+  with a diarization service.
 
 On fal, only the WebSocket and ``transcribe()`` with ``batch=False`` are
 available.
@@ -37,7 +39,9 @@ from kotoba.models import (
     JobIDResponse,
     JobState,
     JobStatus,
+    SemanticVAD,
     ServerVAD,
+    StreamEvent,
     TranscriptionStylePreference,
     TranscriptResult,
 )
@@ -362,11 +366,26 @@ class ASRClient:
         sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
-        turn_detection: ServerVAD | dict | Literal[False] | None = None,
+        turn_detection: ServerVAD | SemanticVAD | dict | Literal[False] | None = None,
         timestamps: bool = False,
+        diarization: bool = False,
         url: str | None = None,
     ) -> ASRSession:
-        """Open a streaming ASR session. Caller drives send_audio / commit."""
+        """Open a streaming ASR session. Caller drives send_audio / commit.
+
+        ``diarization=True`` sends ``session.diarization: true`` (deployments with
+        a diarization service only): ``partial_transcript`` events carry a
+        provisional ``speaker_id`` and ``final_transcript`` events the settled
+        one. A whitespace-only partial (the space between words) has no
+        speaker. With ``turn_detection`` left as ``None`` the server applies
+        ``semantic_vad`` (eagerness medium), since only finals carry the settled
+        speaker; ``turn_detection=False`` keeps the provisional speakers only.
+        Provisional speakers are never corrected and are less reliable just
+        after a speaker change, so keep turn detection on when speaker accuracy
+        matters. It combines with ``keywords``. A deployment that cannot diarize the
+        session raises ``ProtocolError`` with ``code="invalid_parameters"`` and
+        ``param="session.diarization"`` when the session starts.
+        """
 
         return ASRSession(
             _resolve_ws_url(url),
@@ -376,6 +395,7 @@ class ASRClient:
             style_preference=style_preference,
             turn_detection=turn_detection,
             timestamps=timestamps,
+            diarization=diarization,
             api_key=self._api_key,
         )
 
@@ -387,7 +407,7 @@ class ASRClient:
         sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
-        turn_detection: ServerVAD | dict | Literal[False] | None = None,
+        turn_detection: ServerVAD | SemanticVAD | dict | Literal[False] | None = None,
         url: str | None = None,
     ) -> TranscriptResult:
         """Internal helper; not part of the documented public API.
@@ -418,6 +438,7 @@ class ASRClient:
                     break
         return TranscriptResult(text="".join(parts))
 
+    @overload
     def transcribe_stream(
         self,
         audio: AudioSource,
@@ -426,14 +447,69 @@ class ASRClient:
         sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
-        turn_detection: ServerVAD | dict | Literal[False] | None = None,
+        turn_detection: ServerVAD | SemanticVAD | dict | Literal[False] | None = None,
+        timestamps: bool = False,
+        diarization: Literal[False] = False,
         url: str | None = None,
-    ) -> Iterator[str]:
+    ) -> Iterator[str]: ...
+
+    @overload
+    def transcribe_stream(
+        self,
+        audio: AudioSource,
+        *,
+        language: str = "ja",
+        sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
+        keywords: list[str] | None = None,
+        style_preference: TranscriptionStylePreference | dict | None = None,
+        turn_detection: ServerVAD | SemanticVAD | dict | Literal[False] | None = None,
+        timestamps: bool = False,
+        diarization: Literal[True],
+        url: str | None = None,
+    ) -> Iterator[StreamEvent]: ...
+
+    @overload
+    def transcribe_stream(
+        self,
+        audio: AudioSource,
+        *,
+        language: str = "ja",
+        sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
+        keywords: list[str] | None = None,
+        style_preference: TranscriptionStylePreference | dict | None = None,
+        turn_detection: ServerVAD | SemanticVAD | dict | Literal[False] | None = None,
+        timestamps: bool = False,
+        diarization: bool = False,
+        url: str | None = None,
+    ) -> Iterator[str] | Iterator[StreamEvent]: ...
+
+    def transcribe_stream(
+        self,
+        audio: AudioSource,
+        *,
+        language: str = "ja",
+        sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
+        keywords: list[str] | None = None,
+        style_preference: TranscriptionStylePreference | dict | None = None,
+        turn_detection: ServerVAD | SemanticVAD | dict | Literal[False] | None = None,
+        timestamps: bool = False,
+        diarization: bool = False,
+        url: str | None = None,
+    ) -> Iterator[str] | Iterator[StreamEvent]:
         """Yield transcript deltas for a streaming pcm16 source.
 
         ``audio`` may be a sync iterator (file chunks, mic queue drain) or an
         async iterator. The feeder is scheduled on the session's background
         loop so deltas surface as soon as the server emits them.
+
+        ``diarization=True`` (see ``stream``) yields ``StreamEvent`` objects
+        instead of strings: ``partial_transcript`` events with a provisional
+        ``speaker_id`` (``None`` on a whitespace-only partial) and
+        ``final_transcript`` events (one per turn, the turn's whole text) with
+        the settled ``speaker_id``. A final can arrive after
+        the next turn's first partials; ``metadata["item_id"]`` links a final
+        to its partials. ``timestamps=True`` adds ``start_ms`` / ``end_ms`` to
+        ``metadata``.
         """
 
         session = self.stream(
@@ -442,6 +518,8 @@ class ASRClient:
             keywords=keywords,
             style_preference=style_preference,
             turn_detection=turn_detection,
+            timestamps=timestamps,
+            diarization=diarization,
             url=url,
         )
         with session:
@@ -453,10 +531,13 @@ class ASRClient:
             )
             try:
                 for event in session:
-                    if event.type == "partial_transcript" and event.text:
-                        yield event.text
-                    elif event.type == "done":
+                    if event.type == "done":
                         break
+                    if diarization:
+                        if event.type in ("partial_transcript", "final_transcript"):
+                            yield event
+                    elif event.type == "partial_transcript" and event.text:
+                        yield event.text
                 feeder.result()
             finally:
                 if not feeder.done():
@@ -715,10 +796,13 @@ class AsyncASRClient:
         sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
-        turn_detection: ServerVAD | dict | Literal[False] | None = None,
+        turn_detection: ServerVAD | SemanticVAD | dict | Literal[False] | None = None,
         timestamps: bool = False,
+        diarization: bool = False,
         url: str | None = None,
     ) -> AsyncASRSession:
+        """Async ``stream``; ``diarization`` behaves as in ``ASRClient.stream``."""
+
         return AsyncASRSession(
             _resolve_ws_url(url),
             language=language,
@@ -727,6 +811,7 @@ class AsyncASRClient:
             style_preference=style_preference,
             turn_detection=turn_detection,
             timestamps=timestamps,
+            diarization=diarization,
             api_key=self._api_key,
         )
 
@@ -738,7 +823,7 @@ class AsyncASRClient:
         sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
-        turn_detection: ServerVAD | dict | Literal[False] | None = None,
+        turn_detection: ServerVAD | SemanticVAD | dict | Literal[False] | None = None,
         url: str | None = None,
     ) -> TranscriptResult:
         """Internal helper; not part of the documented public API.
@@ -768,6 +853,51 @@ class AsyncASRClient:
                     break
         return TranscriptResult(text="".join(parts))
 
+    @overload
+    def transcribe_stream(
+        self,
+        audio: AudioSource,
+        *,
+        language: str = "ja",
+        sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
+        keywords: list[str] | None = None,
+        style_preference: TranscriptionStylePreference | dict | None = None,
+        turn_detection: ServerVAD | SemanticVAD | dict | Literal[False] | None = None,
+        timestamps: bool = False,
+        diarization: Literal[False] = False,
+        url: str | None = None,
+    ) -> AsyncIterator[str]: ...
+
+    @overload
+    def transcribe_stream(
+        self,
+        audio: AudioSource,
+        *,
+        language: str = "ja",
+        sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
+        keywords: list[str] | None = None,
+        style_preference: TranscriptionStylePreference | dict | None = None,
+        turn_detection: ServerVAD | SemanticVAD | dict | Literal[False] | None = None,
+        timestamps: bool = False,
+        diarization: Literal[True],
+        url: str | None = None,
+    ) -> AsyncIterator[StreamEvent]: ...
+
+    @overload
+    def transcribe_stream(
+        self,
+        audio: AudioSource,
+        *,
+        language: str = "ja",
+        sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
+        keywords: list[str] | None = None,
+        style_preference: TranscriptionStylePreference | dict | None = None,
+        turn_detection: ServerVAD | SemanticVAD | dict | Literal[False] | None = None,
+        timestamps: bool = False,
+        diarization: bool = False,
+        url: str | None = None,
+    ) -> AsyncIterator[str] | AsyncIterator[StreamEvent]: ...
+
     async def transcribe_stream(
         self,
         audio: AudioSource,
@@ -776,24 +906,37 @@ class AsyncASRClient:
         sample_rate: int = _WS_DEFAULT_SAMPLE_RATE,
         keywords: list[str] | None = None,
         style_preference: TranscriptionStylePreference | dict | None = None,
-        turn_detection: ServerVAD | dict | Literal[False] | None = None,
+        turn_detection: ServerVAD | SemanticVAD | dict | Literal[False] | None = None,
+        timestamps: bool = False,
+        diarization: bool = False,
         url: str | None = None,
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[str] | AsyncIterator[StreamEvent]:
+        """Async ``transcribe_stream``.
+
+        ``diarization=True`` yields ``StreamEvent`` objects as in
+        ``ASRClient.transcribe_stream``.
+        """
+
         async with self.stream(
             language=language,
             sample_rate=sample_rate,
             keywords=keywords,
             style_preference=style_preference,
             turn_detection=turn_detection,
+            timestamps=timestamps,
+            diarization=diarization,
             url=url,
         ) as session:
             feeder = asyncio.create_task(session.feed(audio))
             try:
                 async for event in session:
-                    if event.type == "partial_transcript" and event.text:
-                        yield event.text
-                    elif event.type == "done":
+                    if event.type == "done":
                         break
+                    if diarization:
+                        if event.type in ("partial_transcript", "final_transcript"):
+                            yield event
+                    elif event.type == "partial_transcript" and event.text:
+                        yield event.text
                 await feeder
             finally:
                 if not feeder.done():

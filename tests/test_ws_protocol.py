@@ -25,8 +25,8 @@ from kotoba.errors import APIError, AuthError, ProtocolError
 from kotoba.tts import AsyncTTSClient, TTSClient, _content_type_for
 
 
-# The server reads the kana preference from
-# input_audio_transcription.style_preference; a flat `kana` key is ignored.
+# The SDK sends the kana preference only as input_audio_transcription.style_preference;
+# the server still accepts the deprecated flat `kana` from older clients.
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("style_preference", "expected"),

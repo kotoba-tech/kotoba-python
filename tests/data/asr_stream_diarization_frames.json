@@ -1,0 +1,2054 @@
+{
+ "_source": "diarization_on / diarization_off: recorded 2026-10-28 from fal staging Kotoba-Technologies/streaming-stt-layerx--staging, revision 748ef824 (image streaming-stt-20261029-3), 30 s Japanese clip at 16 kHz (kotoba-fal-benchmark ja30sec.flac). Server-to-client frames in arrival order; blank deltas after the first are dropped. diarization_unavailable: recorded 2026-11-02 from fal staging Kotoba-Technologies/kotoba-streaming-stt--staging, a deployment without a diarization service.",
+ "diarization_on": {
+  "session_update": {
+   "type": "transcription_session.update",
+   "session": {
+    "input_audio_format": "pcm16",
+    "input_audio_sample_rate": 16000,
+    "input_audio_number_of_channels": 1,
+    "input_audio_transcription": {
+     "language": "ja",
+     "target_language": "ja",
+     "timestamps": true
+    },
+    "diarization": true
+   }
+  },
+  "frames": [
+   {
+    "event_id": "d5c1225a-1425-4e81-a59f-f415166181ea-tc-1793210535616793",
+    "type": "transcription_session.created"
+   },
+   {
+    "event_id": "d5c1225a-1425-4e81-a59f-f415166181ea-tu-1793210535799017",
+    "type": "transcription_session.updated",
+    "session": {
+     "input_audio_format": "pcm16",
+     "input_audio_sample_rate": 16000,
+     "input_audio_number_of_channels": 1,
+     "input_audio_transcription": {
+      "language": "ja",
+      "target_language": "ja",
+      "keywords": null,
+      "style_preference": null,
+      "timestamps": true
+     },
+     "delay": 10,
+     "diarization": true,
+     "turn_detection": {
+      "type": "semantic_vad",
+      "eagerness": "medium"
+     },
+     "object": "realtime.transcription_session"
+    }
+   },
+   {
+    "event_id": "d5c1225a-1425-4e81-a59f-f415166181ea-cc-1793210535975859",
+    "type": "conversation.item.created"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "22fec17d-7146-4d16-a25a-a1702e401a09",
+    "delta": "みたいな",
+    "audio_processed_ms": 0,
+    "start_ms": 0,
+    "end_ms": 139,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "22fec17d-7146-4d16-a25a-a1702e401a09",
+    "delta": "。",
+    "audio_processed_ms": 0,
+    "start_ms": 260,
+    "end_ms": 419,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "event_id": "d5c1225a-1425-4e81-a59f-f415166181ea-co-1793210537042523",
+    "type": "conversation.item.input_audio_transcription.completed",
+    "item_id": "22fec17d-7146-4d16-a25a-a1702e401a09",
+    "transcript": "みたいな。",
+    "start_ms": 0,
+    "end_ms": 419,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "3ab5bdf0-b690-49f5-b3c3-91953c2a719e",
+    "delta": "だから",
+    "audio_processed_ms": 0,
+    "start_ms": 400,
+    "end_ms": 559,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "3ab5bdf0-b690-49f5-b3c3-91953c2a719e",
+    "delta": "なんか",
+    "audio_processed_ms": 0,
+    "start_ms": 720,
+    "end_ms": 880,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "3ab5bdf0-b690-49f5-b3c3-91953c2a719e",
+    "delta": "、",
+    "audio_processed_ms": 0,
+    "start_ms": 960,
+    "end_ms": 1099,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "event_id": "d5c1225a-1425-4e81-a59f-f415166181ea-co-1793210540080944",
+    "type": "conversation.item.input_audio_transcription.completed",
+    "item_id": "3ab5bdf0-b690-49f5-b3c3-91953c2a719e",
+    "transcript": "だからなんか、",
+    "start_ms": 400,
+    "end_ms": 1099,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "delta": "新",
+    "audio_processed_ms": 1099,
+    "start_ms": 5780,
+    "end_ms": 5939,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "delta": "入",
+    "audio_processed_ms": 1099,
+    "start_ms": 5920,
+    "end_ms": 6039,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "delta": "社",
+    "audio_processed_ms": 1099,
+    "start_ms": 6100,
+    "end_ms": 6220,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "delta": "員",
+    "audio_processed_ms": 1099,
+    "start_ms": 6160,
+    "end_ms": 6279,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "delta": "の",
+    "audio_processed_ms": 1099,
+    "start_ms": 6300,
+    "end_ms": 6420,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "delta": "皆",
+    "audio_processed_ms": 1099,
+    "start_ms": 6500,
+    "end_ms": 6660,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "delta": "さんの",
+    "audio_processed_ms": 1099,
+    "start_ms": 6560,
+    "end_ms": 6700,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "delta": "レ",
+    "audio_processed_ms": 1099,
+    "start_ms": 6880,
+    "end_ms": 7000,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "delta": "タ",
+    "audio_processed_ms": 1099,
+    "start_ms": 6960,
+    "end_ms": 7079,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "delta": "ス",
+    "audio_processed_ms": 1099,
+    "start_ms": 7040,
+    "end_ms": 7179,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "delta": "の",
+    "audio_processed_ms": 1099,
+    "start_ms": 7200,
+    "end_ms": 7340,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "delta": "収",
+    "audio_processed_ms": 1099,
+    "start_ms": 7360,
+    "end_ms": 7580,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "delta": "穫",
+    "audio_processed_ms": 1099,
+    "start_ms": 7520,
+    "end_ms": 7719,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "delta": "が",
+    "audio_processed_ms": 1099,
+    "start_ms": 7740,
+    "end_ms": 7879,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "delta": "これから",
+    "audio_processed_ms": 1099,
+    "start_ms": 8160,
+    "end_ms": 8299,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "delta": "始",
+    "audio_processed_ms": 1099,
+    "start_ms": 8800,
+    "end_ms": 8960,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "delta": "まり",
+    "audio_processed_ms": 1099,
+    "start_ms": 8820,
+    "end_ms": 8960,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "delta": "ます",
+    "audio_processed_ms": 1099,
+    "start_ms": 8960,
+    "end_ms": 9100,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "delta": "。",
+    "audio_processed_ms": 1099,
+    "start_ms": 9140,
+    "end_ms": 9280,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "event_id": "d5c1225a-1425-4e81-a59f-f415166181ea-co-1793210546068713",
+    "type": "conversation.item.input_audio_transcription.completed",
+    "item_id": "d106f445-90f2-48b3-9da9-18fc2a67b19c",
+    "transcript": "新入社員の皆さんのレタスの収穫がこれから始まります。",
+    "start_ms": 5780,
+    "end_ms": 9280,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "a30db486-5b96-4869-a315-cc1a830b1b5d",
+    "delta": "は",
+    "audio_processed_ms": 1099,
+    "start_ms": 9240,
+    "end_ms": 9380,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "a30db486-5b96-4869-a315-cc1a830b1b5d",
+    "delta": "い",
+    "audio_processed_ms": 1099,
+    "start_ms": 9300,
+    "end_ms": 9440,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "a30db486-5b96-4869-a315-cc1a830b1b5d",
+    "delta": "。",
+    "audio_processed_ms": 1099,
+    "start_ms": 9480,
+    "end_ms": 9619,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "e4215895-d178-4de3-aae1-5a4427c1f468",
+    "delta": "お",
+    "audio_processed_ms": 1099,
+    "start_ms": 9540,
+    "end_ms": 9680,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "e4215895-d178-4de3-aae1-5a4427c1f468",
+    "delta": "。",
+    "audio_processed_ms": 1099,
+    "start_ms": 9580,
+    "end_ms": 9720,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "event_id": "d5c1225a-1425-4e81-a59f-f415166181ea-co-1793210546453248",
+    "type": "conversation.item.input_audio_transcription.completed",
+    "item_id": "a30db486-5b96-4869-a315-cc1a830b1b5d",
+    "transcript": "はい。",
+    "start_ms": 9240,
+    "end_ms": 9619,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "event_id": "d5c1225a-1425-4e81-a59f-f415166181ea-co-1793210546453367",
+    "type": "conversation.item.input_audio_transcription.completed",
+    "item_id": "e4215895-d178-4de3-aae1-5a4427c1f468",
+    "transcript": "お。",
+    "start_ms": 9540,
+    "end_ms": 9720,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "58028a23-3a71-4b35-872a-9fd478845f7b",
+    "delta": "は",
+    "audio_processed_ms": 1099,
+    "start_ms": 10020,
+    "end_ms": 10160,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "58028a23-3a71-4b35-872a-9fd478845f7b",
+    "delta": "い",
+    "audio_processed_ms": 1099,
+    "start_ms": 10560,
+    "end_ms": 10679,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "58028a23-3a71-4b35-872a-9fd478845f7b",
+    "delta": "、",
+    "audio_processed_ms": 1099,
+    "start_ms": 10660,
+    "end_ms": 10799,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "58028a23-3a71-4b35-872a-9fd478845f7b",
+    "delta": "グ",
+    "audio_processed_ms": 1099,
+    "start_ms": 10820,
+    "end_ms": 10960,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "58028a23-3a71-4b35-872a-9fd478845f7b",
+    "delta": "ッド",
+    "audio_processed_ms": 1120,
+    "start_ms": 10960,
+    "end_ms": 11119,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "58028a23-3a71-4b35-872a-9fd478845f7b",
+    "delta": "持って",
+    "audio_processed_ms": 1360,
+    "start_ms": 11260,
+    "end_ms": 11380,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "58028a23-3a71-4b35-872a-9fd478845f7b",
+    "delta": "。",
+    "audio_processed_ms": 1440,
+    "start_ms": 11460,
+    "end_ms": 11599,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "event_id": "d5c1225a-1425-4e81-a59f-f415166181ea-co-1793210548229129",
+    "type": "conversation.item.input_audio_transcription.completed",
+    "item_id": "58028a23-3a71-4b35-872a-9fd478845f7b",
+    "transcript": "はい、グッド持って。",
+    "start_ms": 10020,
+    "end_ms": 11599,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "8f86e0e3-719a-4c77-a5c8-734afbc177f1",
+    "delta": "は",
+    "audio_processed_ms": 1760,
+    "start_ms": 11600,
+    "end_ms": 11760,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "8f86e0e3-719a-4c77-a5c8-734afbc177f1",
+    "delta": "い",
+    "audio_processed_ms": 1840,
+    "start_ms": 11660,
+    "end_ms": 11800,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "8f86e0e3-719a-4c77-a5c8-734afbc177f1",
+    "delta": "。",
+    "audio_processed_ms": 1920,
+    "start_ms": 11860,
+    "end_ms": 11980,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "event_id": "d5c1225a-1425-4e81-a59f-f415166181ea-co-1793210548708127",
+    "type": "conversation.item.input_audio_transcription.completed",
+    "item_id": "8f86e0e3-719a-4c77-a5c8-734afbc177f1",
+    "transcript": "はい。",
+    "start_ms": 11600,
+    "end_ms": 11980,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "36fa7a5d-685e-4c1d-a89a-6ad1f7c6370d",
+    "delta": "すごい",
+    "audio_processed_ms": 2640,
+    "start_ms": 12660,
+    "end_ms": 12799,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "36fa7a5d-685e-4c1d-a89a-6ad1f7c6370d",
+    "delta": "大きい",
+    "audio_processed_ms": 2800,
+    "start_ms": 12700,
+    "end_ms": 12840,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "36fa7a5d-685e-4c1d-a89a-6ad1f7c6370d",
+    "delta": "。",
+    "audio_processed_ms": 2880,
+    "start_ms": 12900,
+    "end_ms": 13059,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "event_id": "d5c1225a-1425-4e81-a59f-f415166181ea-co-1793210549667760",
+    "type": "conversation.item.input_audio_transcription.completed",
+    "item_id": "36fa7a5d-685e-4c1d-a89a-6ad1f7c6370d",
+    "transcript": "すごい大きい。",
+    "start_ms": 12660,
+    "end_ms": 13059,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "221a48cf-ba16-4c47-85ce-e98dbba72583",
+    "delta": "は",
+    "audio_processed_ms": 3280,
+    "start_ms": 13120,
+    "end_ms": 13259,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "221a48cf-ba16-4c47-85ce-e98dbba72583",
+    "delta": "い",
+    "audio_processed_ms": 3360,
+    "start_ms": 13280,
+    "end_ms": 13420,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "221a48cf-ba16-4c47-85ce-e98dbba72583",
+    "delta": "、",
+    "audio_processed_ms": 3440,
+    "start_ms": 13280,
+    "end_ms": 13420,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "221a48cf-ba16-4c47-85ce-e98dbba72583",
+    "delta": "これ",
+    "audio_processed_ms": 3520,
+    "start_ms": 13280,
+    "end_ms": 13420,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "221a48cf-ba16-4c47-85ce-e98dbba72583",
+    "delta": "。",
+    "audio_processed_ms": 3600,
+    "start_ms": 13400,
+    "end_ms": 13560,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "event_id": "d5c1225a-1425-4e81-a59f-f415166181ea-co-1793210550389242",
+    "type": "conversation.item.input_audio_transcription.completed",
+    "item_id": "221a48cf-ba16-4c47-85ce-e98dbba72583",
+    "transcript": "はい、これ。",
+    "start_ms": 13120,
+    "end_ms": 13560,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "1375fe50-4dbd-4770-aa61-59808162c46c",
+    "delta": "は",
+    "audio_processed_ms": 3680,
+    "start_ms": 13600,
+    "end_ms": 13740,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "1375fe50-4dbd-4770-aa61-59808162c46c",
+    "delta": "い",
+    "audio_processed_ms": 3760,
+    "start_ms": 13680,
+    "end_ms": 13819,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "1375fe50-4dbd-4770-aa61-59808162c46c",
+    "delta": "、",
+    "audio_processed_ms": 3840,
+    "start_ms": 13820,
+    "end_ms": 13959,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "1375fe50-4dbd-4770-aa61-59808162c46c",
+    "delta": "は",
+    "audio_processed_ms": 3920,
+    "start_ms": 13820,
+    "end_ms": 13959,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "1375fe50-4dbd-4770-aa61-59808162c46c",
+    "delta": "い",
+    "audio_processed_ms": 4000,
+    "start_ms": 13880,
+    "end_ms": 14020,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "1375fe50-4dbd-4770-aa61-59808162c46c",
+    "delta": "、",
+    "audio_processed_ms": 4080,
+    "start_ms": 14020,
+    "end_ms": 14179,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "1375fe50-4dbd-4770-aa61-59808162c46c",
+    "delta": "上げ",
+    "audio_processed_ms": 4400,
+    "start_ms": 14180,
+    "end_ms": 14340,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "1375fe50-4dbd-4770-aa61-59808162c46c",
+    "delta": "て",
+    "audio_processed_ms": 4480,
+    "start_ms": 14320,
+    "end_ms": 14479,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "1375fe50-4dbd-4770-aa61-59808162c46c",
+    "delta": "、",
+    "audio_processed_ms": 4560,
+    "start_ms": 14480,
+    "end_ms": 14600,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "1375fe50-4dbd-4770-aa61-59808162c46c",
+    "delta": "上げ",
+    "audio_processed_ms": 4640,
+    "start_ms": 14520,
+    "end_ms": 14660,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "1375fe50-4dbd-4770-aa61-59808162c46c",
+    "delta": "て",
+    "audio_processed_ms": 4880,
+    "start_ms": 14700,
+    "end_ms": 14839,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "1375fe50-4dbd-4770-aa61-59808162c46c",
+    "delta": "、",
+    "audio_processed_ms": 4960,
+    "start_ms": 14740,
+    "end_ms": 14880,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "1375fe50-4dbd-4770-aa61-59808162c46c",
+    "delta": "上げ",
+    "audio_processed_ms": 5040,
+    "start_ms": 14800,
+    "end_ms": 14919,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "1375fe50-4dbd-4770-aa61-59808162c46c",
+    "delta": "て",
+    "audio_processed_ms": 5120,
+    "start_ms": 14940,
+    "end_ms": 15079,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "1375fe50-4dbd-4770-aa61-59808162c46c",
+    "delta": "。",
+    "audio_processed_ms": 5200,
+    "start_ms": 15060,
+    "end_ms": 15200,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "event_id": "d5c1225a-1425-4e81-a59f-f415166181ea-co-1793210552009087",
+    "type": "conversation.item.input_audio_transcription.completed",
+    "item_id": "1375fe50-4dbd-4770-aa61-59808162c46c",
+    "transcript": "はい、はい、上げて、上げて、上げて。",
+    "start_ms": 13600,
+    "end_ms": 15200,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "7d78e6d1-bcdb-420a-9950-2385b156a407",
+    "delta": "は",
+    "audio_processed_ms": 5280,
+    "start_ms": 15120,
+    "end_ms": 15260,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "7d78e6d1-bcdb-420a-9950-2385b156a407",
+    "delta": "い",
+    "audio_processed_ms": 5360,
+    "start_ms": 15200,
+    "end_ms": 15320,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "7d78e6d1-bcdb-420a-9950-2385b156a407",
+    "delta": "、",
+    "audio_processed_ms": 5440,
+    "start_ms": 15320,
+    "end_ms": 15460,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "7d78e6d1-bcdb-420a-9950-2385b156a407",
+    "delta": "上げ",
+    "audio_processed_ms": 5600,
+    "start_ms": 15420,
+    "end_ms": 15540,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "7d78e6d1-bcdb-420a-9950-2385b156a407",
+    "delta": "て",
+    "audio_processed_ms": 5680,
+    "start_ms": 15580,
+    "end_ms": 15719,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "7d78e6d1-bcdb-420a-9950-2385b156a407",
+    "delta": "、",
+    "audio_processed_ms": 5760,
+    "start_ms": 15680,
+    "end_ms": 15799,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "7d78e6d1-bcdb-420a-9950-2385b156a407",
+    "delta": "上げ",
+    "audio_processed_ms": 6000,
+    "start_ms": 15820,
+    "end_ms": 15959,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "7d78e6d1-bcdb-420a-9950-2385b156a407",
+    "delta": "て",
+    "audio_processed_ms": 6080,
+    "start_ms": 15880,
+    "end_ms": 16020,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "7d78e6d1-bcdb-420a-9950-2385b156a407",
+    "delta": "。",
+    "audio_processed_ms": 6160,
+    "start_ms": 15920,
+    "end_ms": 16040,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "event_id": "d5c1225a-1425-4e81-a59f-f415166181ea-co-1793210552925739",
+    "type": "conversation.item.input_audio_transcription.completed",
+    "item_id": "7d78e6d1-bcdb-420a-9950-2385b156a407",
+    "transcript": "はい、上げて、上げて。",
+    "start_ms": 15120,
+    "end_ms": 16040,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "e4fd40cd-2d03-4617-9836-31be8e1ecaa8",
+    "delta": "あ",
+    "audio_processed_ms": 6880,
+    "start_ms": 16720,
+    "end_ms": 16839,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "e4fd40cd-2d03-4617-9836-31be8e1ecaa8",
+    "delta": "あ",
+    "audio_processed_ms": 6960,
+    "start_ms": 16780,
+    "end_ms": 16940,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "e4fd40cd-2d03-4617-9836-31be8e1ecaa8",
+    "delta": "、",
+    "audio_processed_ms": 7040,
+    "start_ms": 16780,
+    "end_ms": 16940,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "event_id": "d5c1225a-1425-4e81-a59f-f415166181ea-co-1793210556149087",
+    "type": "conversation.item.input_audio_transcription.completed",
+    "item_id": "e4fd40cd-2d03-4617-9836-31be8e1ecaa8",
+    "transcript": "ああ、",
+    "start_ms": 16720,
+    "end_ms": 16940,
+    "speaker_id": "speaker_1"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "横",
+    "audio_processed_ms": 16940,
+    "start_ms": 20480,
+    "end_ms": 20640,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "浜",
+    "audio_processed_ms": 16940,
+    "start_ms": 20620,
+    "end_ms": 20740,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "市の",
+    "audio_processed_ms": 16940,
+    "start_ms": 20820,
+    "end_ms": 20960,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "化",
+    "audio_processed_ms": 16940,
+    "start_ms": 21180,
+    "end_ms": 21320,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "粧",
+    "audio_processed_ms": 16940,
+    "start_ms": 21260,
+    "end_ms": 21480,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "品",
+    "audio_processed_ms": 16940,
+    "start_ms": 21440,
+    "end_ms": 21580,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "メーカー",
+    "audio_processed_ms": 16940,
+    "start_ms": 21760,
+    "end_ms": 21899,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "、",
+    "audio_processed_ms": 16940,
+    "start_ms": 21980,
+    "end_ms": 22119,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "ファン",
+    "audio_processed_ms": 16940,
+    "start_ms": 22220,
+    "end_ms": 22340,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "ケ",
+    "audio_processed_ms": 16940,
+    "start_ms": 22380,
+    "end_ms": 22519,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "ル",
+    "audio_processed_ms": 16940,
+    "start_ms": 22480,
+    "end_ms": 22600,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "グループ",
+    "audio_processed_ms": 16940,
+    "start_ms": 22640,
+    "end_ms": 22800,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "は",
+    "audio_processed_ms": 16940,
+    "start_ms": 22960,
+    "end_ms": 23079,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "、",
+    "audio_processed_ms": 16940,
+    "start_ms": 23140,
+    "end_ms": 23280,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "先",
+    "audio_processed_ms": 16940,
+    "start_ms": 23800,
+    "end_ms": 23939,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "輩",
+    "audio_processed_ms": 16940,
+    "start_ms": 23920,
+    "end_ms": 24080,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "との",
+    "audio_processed_ms": 16940,
+    "start_ms": 24160,
+    "end_ms": 24279,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "交流",
+    "audio_processed_ms": 16940,
+    "start_ms": 24640,
+    "end_ms": 24780,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "を",
+    "audio_processed_ms": 16940,
+    "start_ms": 24960,
+    "end_ms": 25079,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "打ち",
+    "audio_processed_ms": 16940,
+    "start_ms": 25140,
+    "end_ms": 25300,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "出した",
+    "audio_processed_ms": 16940,
+    "start_ms": 25280,
+    "end_ms": 25420,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "入",
+    "audio_processed_ms": 16940,
+    "start_ms": 25920,
+    "end_ms": 26060,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "社",
+    "audio_processed_ms": 16940,
+    "start_ms": 25920,
+    "end_ms": 26060,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "式",
+    "audio_processed_ms": 16940,
+    "start_ms": 26040,
+    "end_ms": 26180,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "です",
+    "audio_processed_ms": 16940,
+    "start_ms": 26240,
+    "end_ms": 26359,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "delta": "。",
+    "audio_processed_ms": 16940,
+    "start_ms": 26520,
+    "end_ms": 26659,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "event_id": "d5c1225a-1425-4e81-a59f-f415166181ea-co-1793210563411076",
+    "type": "conversation.item.input_audio_transcription.completed",
+    "item_id": "88dc0a06-930d-4f41-989b-263f02b52ef4",
+    "transcript": "横浜市の化粧品メーカー、ファンケルグループは、先輩との交流を打ち出した入社式です。",
+    "start_ms": 20480,
+    "end_ms": 26659,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "6b7142a0-b1cc-4641-aba0-4abb66d8aecf",
+    "delta": "多",
+    "audio_processed_ms": 17440,
+    "start_ms": 27280,
+    "end_ms": 27420,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "6b7142a0-b1cc-4641-aba0-4abb66d8aecf",
+    "delta": "分",
+    "audio_processed_ms": 17520,
+    "start_ms": 27420,
+    "end_ms": 27559,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "6b7142a0-b1cc-4641-aba0-4abb66d8aecf",
+    "delta": "大",
+    "audio_processed_ms": 18320,
+    "start_ms": 27680,
+    "end_ms": 27820,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "6b7142a0-b1cc-4641-aba0-4abb66d8aecf",
+    "delta": "丈夫",
+    "audio_processed_ms": 18400,
+    "start_ms": 27760,
+    "end_ms": 27919,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "6b7142a0-b1cc-4641-aba0-4abb66d8aecf",
+    "delta": "だ",
+    "audio_processed_ms": 18480,
+    "start_ms": 28080,
+    "end_ms": 28199,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "6b7142a0-b1cc-4641-aba0-4abb66d8aecf",
+    "delta": "よね",
+    "audio_processed_ms": 18560,
+    "start_ms": 28160,
+    "end_ms": 28280,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "6b7142a0-b1cc-4641-aba0-4abb66d8aecf",
+    "delta": "。",
+    "audio_processed_ms": 18640,
+    "start_ms": 28420,
+    "end_ms": 28560,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "event_id": "d5c1225a-1425-4e81-a59f-f415166181ea-co-1793210565388702",
+    "type": "conversation.item.input_audio_transcription.completed",
+    "item_id": "6b7142a0-b1cc-4641-aba0-4abb66d8aecf",
+    "transcript": "多分大丈夫だよね。",
+    "start_ms": 27280,
+    "end_ms": 28560,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "05eaa806-a356-44c5-81b0-637f57ec60a9",
+    "delta": "大",
+    "audio_processed_ms": 19120,
+    "start_ms": 28860,
+    "end_ms": 28980,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "05eaa806-a356-44c5-81b0-637f57ec60a9",
+    "delta": "丈夫",
+    "audio_processed_ms": 19200,
+    "start_ms": 28900,
+    "end_ms": 29040,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "05eaa806-a356-44c5-81b0-637f57ec60a9",
+    "delta": "です",
+    "audio_processed_ms": 19280,
+    "start_ms": 29080,
+    "end_ms": 29220,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": "05eaa806-a356-44c5-81b0-637f57ec60a9",
+    "delta": "。",
+    "audio_processed_ms": 19360,
+    "start_ms": 29340,
+    "end_ms": 29460,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "event_id": "d5c1225a-1425-4e81-a59f-f415166181ea-co-1793210566049572",
+    "type": "conversation.item.input_audio_transcription.completed",
+    "item_id": "05eaa806-a356-44c5-81b0-637f57ec60a9",
+    "transcript": "大丈夫です。",
+    "start_ms": 28860,
+    "end_ms": 29460,
+    "speaker_id": "speaker_2"
+   },
+   {
+    "event_id": "d5c1225a-1425-4e81-a59f-f415166181ea-ic-1793210567393348",
+    "type": "input_audio_buffer.committed",
+    "item_id": null,
+    "audio_processed_ms": 30000
+   }
+  ]
+ },
+ "diarization_off": {
+  "session_update": {
+   "type": "transcription_session.update",
+   "session": {
+    "input_audio_format": "pcm16",
+    "input_audio_sample_rate": 16000,
+    "input_audio_number_of_channels": 1,
+    "input_audio_transcription": {
+     "language": "ja",
+     "target_language": "ja"
+    }
+   }
+  },
+  "frames": [
+   {
+    "event_id": "d4820fb8-d526-4d50-8a3d-6be664f7368a-tc-1793210571811605",
+    "type": "transcription_session.created"
+   },
+   {
+    "event_id": "d4820fb8-d526-4d50-8a3d-6be664f7368a-tu-1793210571988740",
+    "type": "transcription_session.updated",
+    "session": {
+     "input_audio_format": "pcm16",
+     "input_audio_sample_rate": 16000,
+     "input_audio_number_of_channels": 1,
+     "input_audio_transcription": {
+      "language": "ja",
+      "target_language": "ja",
+      "keywords": null,
+      "style_preference": null,
+      "timestamps": false
+     },
+     "delay": 10,
+     "diarization": false,
+     "turn_detection": false,
+     "object": "realtime.transcription_session"
+    }
+   },
+   {
+    "event_id": "d4820fb8-d526-4d50-8a3d-6be664f7368a-cc-1793210572163687",
+    "type": "conversation.item.created"
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "で",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "、",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "だから",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "何",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "、",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "新",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "入",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "社",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "員",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "の",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "皆",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "さんの",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "レ",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "タ",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "ス",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "の",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "収",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "穫",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "が",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "、",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "これから",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "始",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "まり",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "ます",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "。",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "は",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "い",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "。",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "お",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "。",
+    "audio_processed_ms": 0
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "は",
+    "audio_processed_ms": 560
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "い",
+    "audio_processed_ms": 640
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "、",
+    "audio_processed_ms": 720
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "グ",
+    "audio_processed_ms": 960
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "ー",
+    "audio_processed_ms": 1040
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "っと",
+    "audio_processed_ms": 1200
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "持って",
+    "audio_processed_ms": 1280
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "、",
+    "audio_processed_ms": 1360
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "右",
+    "audio_processed_ms": 1840
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "。",
+    "audio_processed_ms": 1920
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "あ",
+    "audio_processed_ms": 2560
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "、",
+    "audio_processed_ms": 2640
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "すごい",
+    "audio_processed_ms": 2720
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "大きい",
+    "audio_processed_ms": 2800
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "ね",
+    "audio_processed_ms": 2880
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "。",
+    "audio_processed_ms": 2960
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "は",
+    "audio_processed_ms": 3120
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "い",
+    "audio_processed_ms": 3200
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "、",
+    "audio_processed_ms": 3280
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "これ",
+    "audio_processed_ms": 3360
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "。",
+    "audio_processed_ms": 3440
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "は",
+    "audio_processed_ms": 3600
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "い",
+    "audio_processed_ms": 3680
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "、",
+    "audio_processed_ms": 3760
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "は",
+    "audio_processed_ms": 3920
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "い",
+    "audio_processed_ms": 4000
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "、",
+    "audio_processed_ms": 4080
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "上げ",
+    "audio_processed_ms": 4240
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "て",
+    "audio_processed_ms": 4560
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "、",
+    "audio_processed_ms": 4640
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "上げ",
+    "audio_processed_ms": 4720
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "て",
+    "audio_processed_ms": 4880
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "、",
+    "audio_processed_ms": 4960
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "上げ",
+    "audio_processed_ms": 5040
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "て",
+    "audio_processed_ms": 5120
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "。",
+    "audio_processed_ms": 5200
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "上げ",
+    "audio_processed_ms": 5600
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "る",
+    "audio_processed_ms": 5680
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "の",
+    "audio_processed_ms": 5760
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "ず",
+    "audio_processed_ms": 5920
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "る",
+    "audio_processed_ms": 6000
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "い",
+    "audio_processed_ms": 6080
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "。",
+    "audio_processed_ms": 6160
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "上げ",
+    "audio_processed_ms": 6320
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "る",
+    "audio_processed_ms": 6400
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "の",
+    "audio_processed_ms": 6480
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "ず",
+    "audio_processed_ms": 6560
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "る",
+    "audio_processed_ms": 6640
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "い",
+    "audio_processed_ms": 6720
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "。",
+    "audio_processed_ms": 6800
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "さ",
+    "audio_processed_ms": 6880
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "あ",
+    "audio_processed_ms": 6960
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "、",
+    "audio_processed_ms": 7040
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "上げ",
+    "audio_processed_ms": 7120
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "る",
+    "audio_processed_ms": 7200
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "の",
+    "audio_processed_ms": 7280
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "ず",
+    "audio_processed_ms": 7360
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "る",
+    "audio_processed_ms": 7440
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "い",
+    "audio_processed_ms": 7520
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "。",
+    "audio_processed_ms": 7600
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "横",
+    "audio_processed_ms": 10800
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "浜",
+    "audio_processed_ms": 10880
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "市の",
+    "audio_processed_ms": 10960
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "化",
+    "audio_processed_ms": 11600
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "粧",
+    "audio_processed_ms": 11760
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "品",
+    "audio_processed_ms": 11840
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "メーカー",
+    "audio_processed_ms": 11920
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "、",
+    "audio_processed_ms": 12000
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "ファン",
+    "audio_processed_ms": 12560
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "ケ",
+    "audio_processed_ms": 12640
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "ル",
+    "audio_processed_ms": 12720
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "グループ",
+    "audio_processed_ms": 12960
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "は",
+    "audio_processed_ms": 13040
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "、",
+    "audio_processed_ms": 13120
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "先",
+    "audio_processed_ms": 14400
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "輩",
+    "audio_processed_ms": 14480
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "との",
+    "audio_processed_ms": 14560
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "交流",
+    "audio_processed_ms": 15040
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "を",
+    "audio_processed_ms": 15120
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "打ち",
+    "audio_processed_ms": 15600
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "出した",
+    "audio_processed_ms": 15680
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "入",
+    "audio_processed_ms": 16320
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "社",
+    "audio_processed_ms": 16400
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "式",
+    "audio_processed_ms": 16480
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "です",
+    "audio_processed_ms": 16560
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "。",
+    "audio_processed_ms": 16640
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "あ",
+    "audio_processed_ms": 17680
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "、",
+    "audio_processed_ms": 17760
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "大",
+    "audio_processed_ms": 17840
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "丈夫",
+    "audio_processed_ms": 18240
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "だ",
+    "audio_processed_ms": 18320
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "よね",
+    "audio_processed_ms": 18400
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "。",
+    "audio_processed_ms": 18480
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "大",
+    "audio_processed_ms": 19200
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "丈夫",
+    "audio_processed_ms": 19280
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "だ",
+    "audio_processed_ms": 19360
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "よね",
+    "audio_processed_ms": 19440
+   },
+   {
+    "type": "conversation.item.input_audio_transcription.delta",
+    "item_id": null,
+    "delta": "。",
+    "audio_processed_ms": 19520
+   },
+   {
+    "event_id": "d4820fb8-d526-4d50-8a3d-6be664f7368a-ic-1793210603500960",
+    "type": "input_audio_buffer.committed",
+    "item_id": null,
+    "audio_processed_ms": 30000
+   }
+  ]
+ },
+ "diarization_unavailable": {
+  "session_update": {
+   "type": "transcription_session.update",
+   "session": {
+    "input_audio_format": "pcm16",
+    "input_audio_sample_rate": 16000,
+    "input_audio_number_of_channels": 1,
+    "input_audio_transcription": {
+     "language": "ja",
+     "target_language": "ja"
+    },
+    "diarization": true
+   }
+  },
+  "frames": [
+   {
+    "event_id": "d6c35764-4e63-4e27-b998-afa48f609816-tc-1793591933845677",
+    "type": "transcription_session.created"
+   },
+   {
+    "error": {
+     "type": "invalid_request_error",
+     "code": "invalid_parameters",
+     "message": "無効なパラメータです",
+     "param": "session.diarization"
+    },
+    "event_id": "d6c35764-4e63-4e27-b998-afa48f609816-er-1793591934053563",
+    "type": "error",
+    "item_id": null
+   }
+  ]
+ }
+}

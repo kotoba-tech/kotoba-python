@@ -31,6 +31,22 @@ class ServerVAD(BaseModel):
     silence_duration_ms: StrictInt | None = Field(default=800, ge=0)
 
 
+class SemanticVAD(BaseModel):
+    """Turn detection that ends turns at semantic units."""
+
+    type: Literal["semantic_vad"] = "semantic_vad"
+    eagerness: Literal["low", "medium", "high", "auto"] | None = "auto"
+
+
+def coerce_turn_detection(value: ServerVAD | SemanticVAD | Mapping[str, Any]) -> ServerVAD | SemanticVAD:
+    """Choose the model by the dict's ``type``; an untyped dict keeps the server_vad default."""
+    if isinstance(value, (ServerVAD, SemanticVAD)):
+        return value
+    if isinstance(value, Mapping) and value.get("type") == "semantic_vad":
+        return SemanticVAD.model_validate(value)
+    return ServerVAD.model_validate(value)
+
+
 def normalize_keywords(keywords: list[str] | None) -> list[str] | None:
     """Strip the terms and drop blank ones; ``None`` or an all-blank list means no keywords.
 
@@ -122,6 +138,14 @@ class StreamEvent(BaseModel):
     text: str | None = None
     audio: bytes | None = None
     is_final: bool | None = None
+    speaker_id: str | None = Field(
+        default=None,
+        description=(
+            "Streaming ASR with diarization=True: the speaker (speaker_1 ... speaker_8, stable "
+            "within one connection only). Provisional on partial_transcript (the speaker talking "
+            "when the text was sent; it can change), settled on final_transcript. None otherwise."
+        ),
+    )
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 

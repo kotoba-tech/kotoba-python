@@ -3,7 +3,7 @@
 import json
 
 import pytest
-from kotoba import ASRClient, AsyncASRClient, ServerVAD
+from kotoba import ASRClient, AsyncASRClient, SemanticVAD, ServerVAD
 from kotoba._ws_asr import ASRSession, AsyncASRSession
 from pydantic import ValidationError
 
@@ -17,6 +17,9 @@ from pydantic import ValidationError
     pytest.param({"turn_detection": {"silence_duration_ms": 800}}, {"type": "server_vad", "silence_duration_ms": 800}, id="custom-dict"),
     pytest.param({"turn_detection": ServerVAD(silence_duration_ms=0)}, {"type": "server_vad", "silence_duration_ms": 0}, id="typed-zero"),
     pytest.param({"turn_detection": {"silence_duration_ms": None}}, {"type": "server_vad"}, id="null-duration-uses-server-default"),
+    pytest.param({"turn_detection": {"type": "semantic_vad"}}, {"type": "semantic_vad", "eagerness": "auto"}, id="semantic-dict"),
+    pytest.param({"turn_detection": SemanticVAD(eagerness="high")}, {"type": "semantic_vad", "eagerness": "high"}, id="semantic-typed"),
+    pytest.param({"turn_detection": {"type": "semantic_vad", "eagerness": None}}, {"type": "semantic_vad"}, id="null-eagerness-uses-server-default"),
 ])
 def test_session_request_serialization(factory, options, expected):
     session = factory().stream(url="ws://unused", language="ja", **options)
@@ -52,6 +55,7 @@ def test_timestamps_opt_in_serialization(factory, options, expected):
     pytest.param({"silence_duration_ms": 1.5}, id="fractional"),
     pytest.param({"silence_duration_ms": "400"}, id="string-duration"),
     pytest.param({"silence_duration_ms": True}, id="boolean-duration"),
+    pytest.param({"type": "semantic_vad", "eagerness": "eager"}, id="unsupported-eagerness"),
 ])
 def test_invalid_turn_configuration(config):
     with pytest.raises(ValidationError):
