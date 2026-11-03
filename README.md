@@ -366,16 +366,30 @@ Blank terms are dropped. The deployment's limits (1,000 terms of 64 characters o
 
 #### Speaker diarization (streaming)
 
-`diarization=True` asks a deployment that runs a diarization service to attribute the live transcript to speakers; `transcribe_stream()` then yields `StreamEvent`s with `speaker_id` instead of strings. Provisional and settled speakers, the turn-detection default and the errors are defined in the [SDK contract](../../../.agent/sdd/kotoba-api-spec.md#python-sdk-streaming-asr).
+`diarization=True` asks a deployment that runs a diarization service to attribute the live transcript to speakers; `transcribe_stream()` then yields `StreamEvent`s with `speaker_id` instead of strings. Partials are provisional: each final is one speaker's turn and replaces the partials of its `event.metadata["item_id"]` (text and speaker may change), an empty final retires that item, and a final can arrive without partials. Keep the transcript keyed by `item_id`. Provisional and settled speakers, the turn-detection default and the errors are defined in the [SDK contract](../../../.agent/sdd/kotoba-api-spec.md#python-sdk-streaming-asr).
 
 ```python
+items: dict[str, tuple[str | None, str]] = {}  # item_id -> (speaker, text)
+last = None  # item_id of the last non-blank partial
 for event in client.asr.transcribe_stream(mic_chunks(), language="ja", diarization=True, timestamps=True):
+    item_id = event.metadata["item_id"]
     if event.type == "partial_transcript":
-        # A whitespace-only partial (the space between words) has no speaker.
-        print(f"[{event.speaker_id}?] {event.text}" if event.speaker_id else event.text, end="", flush=True)
-    else:  # final_transcript
-        print(f"\n{event.speaker_id} {event.metadata['start_ms']}-{event.metadata['end_ms']} ms: {event.text.strip()}")
+        if not event.text.strip():
+            # The space between words has no speaker and no item_id; it joins the previous partial's item.
+            if last in items:
+                items[last] = (items[last][0], items[last][1] + event.text)
+            continue
+        last = item_id
+        items[item_id] = (event.speaker_id, items.get(item_id, (None, ""))[1] + event.text)
+    elif event.text:  # final_transcript: the settled turn replaces its partials
+        items[item_id] = (event.speaker_id, event.text)
+        span = f"{event.metadata.get('start_ms')}-{event.metadata.get('end_ms')} ms"  # absent without a span
+        print(f"{event.speaker_id} {span}: {event.text.strip()}")
+    else:  # an empty final retires a provisional item
+        items.pop(item_id, None)
 ```
+
+An empty final carries `speaker_id` but no `start_ms` / `end_ms`; check `event.text` before counting finals per speaker. The dict above keeps every settled item (about 1,600 per hour of conversation), so a long session should drop the settled items it no longer displays.
 
 ### Exceptions
 
@@ -384,7 +398,7 @@ All inherit from `kotoba.KotobaError`:
 | Exception | When |
 |---|---|
 | `AuthError` | HTTP 401/403, WS auth rejection |
-| `ProtocolError` | Other 4xx, a server `error` frame violating the contract, or a 200 whose body does not match the `/speech-to-text` response contract (`status_code=200`). `code` and `param` mirror the error frame; a streaming deployment that cannot diarize the session gives `code="invalid_parameters"`, `param="session.diarization"` |
+| `ProtocolError` | Other 4xx, a server `error` frame violating the contract, or a 200 whose body does not match the `/speech-to-text` response contract (`status_code=200`). `code` and `param` mirror the error frame; a streaming deployment that cannot diarize the session gives `code="invalid_parameters"`, `param="session.diarization"`, and one whose diarization service is full gives `code="too_many_concurrent_requests"`, `param="session.diarization"` (retry later or without diarization). A streaming `language` the deployment does not serve gives `param="session.input_audio_transcription.target_language"`, because the SDK sends `language` as the target language too |
 | `APIError` | Transport error, 5xx (after GET retries), or an unexpected redirect |
 | `TimeoutError` | HTTP timeout, WS handshake timeout, or `transcribe(batch=True)` polling deadline exceeded |
 | `JobNotFoundError` | GET returned 404 |

@@ -379,10 +379,12 @@ class ASRClient:
         one. A whitespace-only partial (the space between words) has no
         speaker. With ``turn_detection`` left as ``None`` the server applies
         ``semantic_vad`` (eagerness medium), since only finals carry the settled
-        speaker; ``turn_detection=False`` keeps the provisional speakers only.
-        Provisional speakers are never corrected and are less reliable just
-        after a speaker change, so keep turn detection on when speaker accuracy
-        matters. It combines with ``keywords``. A deployment that cannot diarize the
+        speaker; ``turn_detection=False`` is rejected with ``ProtocolError``
+        (``param="session.turn_detection"``). Partials are provisional: each
+        final is one speaker's turn and replaces the partials of its
+        ``metadata["item_id"]`` (text and speaker may change), an empty final
+        retires that item, and a final can arrive without partials. It combines
+        with ``keywords``. A deployment that cannot diarize the
         session raises ``ProtocolError`` with ``code="invalid_parameters"`` and
         ``param="session.diarization"`` when the session starts.
         """
@@ -505,10 +507,10 @@ class ASRClient:
         ``diarization=True`` (see ``stream``) yields ``StreamEvent`` objects
         instead of strings: ``partial_transcript`` events with a provisional
         ``speaker_id`` (``None`` on a whitespace-only partial) and
-        ``final_transcript`` events (one per turn, the turn's whole text) with
-        the settled ``speaker_id``. A final can arrive after
-        the next turn's first partials; ``metadata["item_id"]`` links a final
-        to its partials. ``timestamps=True`` adds ``start_ms`` / ``end_ms`` to
+        ``final_transcript`` events (one per speaker turn, replacing the
+        partials of its ``metadata["item_id"]``; an empty final retires that
+        item) with the settled ``speaker_id``. A final can arrive after the
+        next turn's first partials, or without any partial. ``timestamps=True`` adds ``start_ms`` / ``end_ms`` to
         ``metadata``.
         """
 

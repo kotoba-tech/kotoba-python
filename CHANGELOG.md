@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.3.2
+
+- STT: with `diarization=True` an empty `conversation.item.input_audio_transcription.completed`
+  is now delivered as a `final_transcript` with `text == ""` (0.3.1 dropped it).
+  It retires the provisional item of its `metadata["item_id"]`; without it a
+  client kept that item's partial text forever and showed it twice once the
+  server merged the text into another speaker turn. Without diarization empty
+  completions are still dropped.
+- STT docs: with `diarization=True`, partials are provisional. Each final is
+  one speaker's turn and replaces the partials of its `metadata["item_id"]`
+  (text and speaker may change), an empty final retires that item, and a final
+  can arrive without partials. A whitespace-only partial has no `speaker_id`
+  and no `metadata["item_id"]` (`None`); it continues the previous partial's
+  item. The README and `examples/asr_stream_diarization_async.py` keep the
+  transcript keyed by `item_id`.
+- STT docs: an empty final carries `speaker_id` but no `start_ms` / `end_ms`
+  (check `event.text` before counting finals per speaker), and a long session
+  should drop the settled items it no longer displays. The `ProtocolError` row
+  lists `code="too_many_concurrent_requests"` with `param="session.diarization"`
+  (diarization service full) and
+  `param="session.input_audio_transcription.target_language"` for a streaming
+  `language` the deployment does not serve.
+- STT docs: `turn_detection=False` with `diarization=True` is rejected by the
+  server with `kotoba.ProtocolError` (`param="session.turn_detection"`); 0.3.1
+  said it kept the provisional speakers only.
+
 ## 0.3.1
 
 - STT: streaming speaker diarization. `stream()` / `transcribe_stream()` take

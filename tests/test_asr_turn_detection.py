@@ -87,3 +87,28 @@ async def test_multiple_turn_events_preserve_ids_and_text(with_span):
             assert (event.metadata["start_ms"], event.metadata["end_ms"]) == (780, 1190)
         else:
             assert "start_ms" not in event.metadata and "end_ms" not in event.metadata
+
+
+@pytest.mark.parametrize("factory", [ASRClient, AsyncASRClient], ids=["sync", "async"])
+@pytest.mark.parametrize("enabled", [False, True])
+def test_diarization_is_the_only_speaker_option(factory, enabled):
+    session = factory().stream(url="ws://unused", diarization=enabled)
+    if isinstance(session, ASRSession):
+        session = session._asr
+    wire = session._session_update()["session"]
+    assert wire.get("diarization") is (True if enabled else None)
+    assert "overlap" not in wire and "diarization_model" not in wire
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("diarization", [False, True])
+async def test_empty_completion_is_delivered_for_diarization_item_retirement(diarization):
+    session = AsyncASRSession("ws://unused", language="ja", diarization=diarization)
+    for kind, item, text in [("delta", "a", "暫定"), ("completed", "a", ""), ("completed", "b", "確定")]:
+        await session._handle_text_frame({"type": f"conversation.item.input_audio_transcription.{kind}",
+                                         "item_id": item, "delta" if kind == "delta" else "transcript": text,
+                                         "speaker_id": "speaker_1"})
+    await session._handle_text_frame({"type": "input_audio_buffer.committed"})
+    events = [event async for event in session]
+    final = [event for event in events if event.type == "final_transcript"]
+    assert [(event.metadata["item_id"], event.text) for event in final] == ([("a", ""), ("b", "確定")] if diarization else [("b", "確定")])

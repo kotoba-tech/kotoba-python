@@ -23,12 +23,16 @@ after a disconnect.
 
 With ``diarization=True`` the session sends ``session.diarization: true``. Every
 non-blank delta then carries a provisional ``speaker_id`` (the speaker talking
-when the text was sent; a whitespace-only delta has none) and every turn
-completion the settled one; the SDK
-exposes both as ``StreamEvent.speaker_id``. Unless ``turn_detection`` is given,
-the server applies ``semantic_vad`` (eagerness medium), because only
-completions carry the settled speaker; ``turn_detection=False`` keeps the
-provisional speakers only.
+when the text was sent; a whitespace-only delta has none, and no ``item_id``
+either) and every turn
+completion the settled one; the SDK exposes both as ``StreamEvent.speaker_id``.
+Partials are provisional: a completion is one speaker's turn and replaces the
+partials of its ``event.metadata["item_id"]`` (text and speaker may change), an
+empty completion retires that item, and a completion may arrive without a
+partial. The resume point waits for unfinished speaker items and overlap
+windows. Unless ``turn_detection`` is given, the server applies ``semantic_vad``
+(eagerness medium); ``turn_detection=False`` is rejected with diarization,
+because only completions carry the settled result.
 """
 
 from __future__ import annotations
@@ -220,7 +224,8 @@ class AsyncASRSession(AsyncSession):
 
         if msg_type == "conversation.item.input_audio_transcription.completed":
             transcript = payload.get("transcript", "")
-            if transcript:
+            # With diarization an empty completion retires a provisional item.
+            if transcript or self._diarization:
                 await self._emit(
                     StreamEvent(
                         type="final_transcript",
