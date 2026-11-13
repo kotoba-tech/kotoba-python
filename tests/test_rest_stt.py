@@ -37,6 +37,30 @@ def test_request_encodes_every_option():
     }
 
 
+def test_request_refuses_verbatim_false():
+    # The route has no verbatim field and ignores an unknown one, so the fillers would stay.
+    with pytest.raises(ValueError, match="verbatim"):
+        SpeechToTextRequest.build(
+            language="ja",
+            keywords=None,
+            style_preference={"verbatim": False},
+            with_timestamps=False,
+            file_format="other",
+        )
+
+
+def test_request_sends_no_verbatim_field():
+    request = SpeechToTextRequest.build(
+        language="ja",
+        keywords=None,
+        style_preference={"human_name": "kana", "verbatim": True},
+        with_timestamps=False,
+        file_format="other",
+    )
+
+    assert request.form == {"file_format": "other", "with_timestamps": "false", "language": "ja", "kana": "true"}
+
+
 @pytest.mark.parametrize("spacing_time", [None, 0.8])
 def test_parse_maps_timed_words_to_segments_and_keeps_metadata(spacing_time):
     result = parse_speech_to_text(

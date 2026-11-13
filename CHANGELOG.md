@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.3
+
+- STT: `style_preference` takes `verbatim`. `{"verbatim": False}` removes
+  fillers and restarts from the transcript (Japanese only), `True` keeps them,
+  and leaving it unset keeps the deployment's default. 0.3.2 and earlier dropped
+  the key without an error. `stream()` / `transcribe_stream()` send it as
+  `session.input_audio_transcription.style_preference.verbatim`, and
+  `transcribe(batch=True)` / `submit_job()` as the job's `verbatim` form field.
+  With a `language` other than `"ja"` the streaming server answers
+  `kotoba.ProtocolError` (`code="invalid_parameters"`,
+  `param="session.input_audio_transcription"`).
+- STT: `transcribe()` in its default mode (`POST /v1/speech-to-text`) raises
+  `ValueError` for `style_preference` with `verbatim=False`: that endpoint has
+  no such option and would return the fillers.
+- STT docs: the streaming languages belong to the deployment, not to the SDK,
+  which sends `language` as given. The README lists the codes fal
+  `kotoba-streaming-stt` serves (`ja`, `en`, `zh`, `zh-tw`, `ko`, `yue`, `es`,
+  `vi`) and says that, there, words spoken while two speakers overlap go to one
+  of them.
+- `scripts/live_check.py` (release check, not part of the package) takes
+  `--language` and checks that a code the deployment does not serve raises
+  `kotoba.ProtocolError` with
+  `param="session.input_audio_transcription.target_language"`.
+
 ## 0.3.2
 
 - STT: with `diarization=True` an empty `conversation.item.input_audio_transcription.completed`

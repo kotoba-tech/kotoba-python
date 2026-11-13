@@ -237,7 +237,7 @@ The sync wrapper runs an `asyncio` loop on a background daemon thread, so the un
 |---|---|
 | `kotoba.KotobaClient` / `AsyncKotobaClient` | Top-level entry point |
 | `client.asr.transcribe(path, ...)` | **REST** transcription — one `POST /v1/speech-to-text` by default (the `stt` app; on fal `kotoba-stt`); `batch=True` submits a job and polls (self-hosted `streaming_stt` only); optional `with_timestamps=True` |
-| `client.asr.stream(...)` / `transcribe_stream(iter)` | Streaming ASR (Japanese, English) over WebSocket |
+| `client.asr.stream(...)` / `transcribe_stream(iter)` | Streaming ASR over WebSocket; the deployment sets the languages (fal `kotoba-streaming-stt`: `ja`, `en`, `zh`, `zh-tw`, `ko`, `yue`, `es`, `vi`) |
 | `client.tts.stream(...)` / `synthesize(...)` / `synthesize_stream(...)` | Streaming TTS (Japanese) |
 | `client.s2st.stream(...)` / `translate(...)` | Streaming speech-to-speech translation |
 | `kotoba.register_endpoint(...)` | Route one language (pair) of a service to a different deployment |
@@ -299,7 +299,7 @@ transcribe(
     language: str | None = None,        # batch=False: None = the server's configured language; batch=True: None = "ja"
     with_timestamps: bool = False,      # per-segment timestamps (batch=False: must be enabled on the deployment)
     diarization: bool = False,          # batch=False only: who said what in result.utterances; speaker_id on segments
-    style_preference: TranscriptionStylePreference | dict | None = None,  # {"human_name": "kana"}
+    style_preference: TranscriptionStylePreference | dict | None = None,  # {"human_name": "kana"}; batch=True also {"verbatim": False}
     keywords: list[str] | None = None,  # terms (names, product words) whose spelling the transcript should prefer; served by every ASR deployment (blank terms dropped; the server enforces the deployment's limits)
     file_format: "other" | "pcm_s16le_16" | None = None,  # batch=False only; raw 16 kHz mono int16, or any encoded audio
     poll_interval: float | None = None,     # batch=True only (default 1.0 s)
@@ -344,6 +344,19 @@ For streaming ASR, use `client.asr.stream()` to manage a session or
 event semantics are defined in the
 [SDK contract](../../../.agent/sdd/kotoba-api-spec.md#python-sdk-streaming-asr).
 
+`language` is the code of the language spoken in the audio (default `"ja"`). The SDK keeps no language list: each deployment serves the languages of its model, and a code it does not serve raises `ProtocolError` (`code="invalid_parameters"`, `param="session.input_audio_transcription.target_language"`) when the session starts. On fal, `kotoba-streaming-stt` serves the codes below; pass them exactly as written (lowercase). Private endpoints serve the languages of their own model.
+
+| `language` | Language |
+|---|---|
+| `ja` | Japanese |
+| `en` | English |
+| `zh` | Mandarin Chinese, Simplified output |
+| `zh-tw` | Mandarin Chinese, Taiwan Traditional output |
+| `ko` | Korean |
+| `yue` | Cantonese |
+| `es` | Spanish |
+| `vi` | Vietnamese |
+
 ```python
 client.tts.stream(language="ja", speaker_id=..., initial_text=..., with_timestamps=False, url=...)  -> TTSSession
 client.tts.synthesize_stream(text, ...)                    -> Iterator[bytes]
@@ -362,11 +375,20 @@ with client.asr.stream(language="ja", keywords=["ウィケット", "佐藤"], st
     ...
 ```
 
+`style_preference` also takes `verbatim`: `{"verbatim": False}` removes fillers and restarts from the transcript, `{"verbatim": True}` keeps them, and leaving it unset keeps the deployment's default. It is for Japanese sessions on deployments that enable it; with another `language` the server answers `ProtocolError` (`code="invalid_parameters"`, `param="session.input_audio_transcription"`). `transcribe(batch=True)` sends it as the job's `verbatim` field. The default `transcribe()` (`POST /v1/speech-to-text`) has no such option and raises `ValueError` for `verbatim=False`.
+
+```python
+with client.asr.stream(language="ja", style_preference={"verbatim": False}) as session:
+    ...
+```
+
 Blank terms are dropped. The deployment's limits (1,000 terms of 64 characters on fal today) are enforced by the server, which answers `invalid_parameters`.
 
 #### Speaker diarization (streaming)
 
 `diarization=True` asks a deployment that runs a diarization service to attribute the live transcript to speakers; `transcribe_stream()` then yields `StreamEvent`s with `speaker_id` instead of strings. Partials are provisional: each final is one speaker's turn and replaces the partials of its `event.metadata["item_id"]` (text and speaker may change), an empty final retires that item, and a final can arrive without partials. Keep the transcript keyed by `item_id`. Provisional and settled speakers, the turn-detection default and the errors are defined in the [SDK contract](../../../.agent/sdd/kotoba-api-spec.md#python-sdk-streaming-asr).
+
+How overlapping speech is attributed depends on the deployment's model. On fal `kotoba-streaming-stt`, where two speakers talk at the same time, the overlapping words go to one of them.
 
 ```python
 items: dict[str, tuple[str | None, str]] = {}  # item_id -> (speaker, text)

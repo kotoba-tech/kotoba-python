@@ -10,6 +10,11 @@ source tree via ``uv run``):
     export KOTOBA_ASR_URL_NO_DIARIZATION=wss://.../v1/realtime  # optional, for (d)
     uv run scripts/live_check.py --keywords 東京 --keywords 大阪
 
+The default clip is Japanese. For another language the deployments serve, give
+its code and a clip in that language (with keywords that occur in the clip):
+
+    uv run scripts/live_check.py --language en --audio clip_en.wav --keywords Tokyo
+
 Checks (one row each in the pass/fail table):
 
   a. ``stream(diarization=True, timestamps=True)``: every non-blank partial
@@ -23,8 +28,12 @@ Checks (one row each in the pass/fail table):
      ``ProtocolError(code="invalid_parameters", param="session.diarization")``.
   e. A ``--long-seconds`` (default 120 s) diarized session at real-time pace
      ends with ``committed`` and no handshake or idle timeout.
+  f. A language code the deployment does not serve (``--unsupported-language``)
+     raises ``ProtocolError(code="invalid_parameters",
+     param="session.input_audio_transcription.target_language")``.
 
-Each deployment is warmed up first (a plain session, retried until
+Checks a-e pass ``--language`` (default ``ja``) to the SDK. Each deployment is
+warmed up first (a plain session in that language, retried until
 ``--warmup-seconds``), so a scaled-to-zero app does not fail the handshake.
 The exit status is non-zero when a check fails.
 """
@@ -140,7 +149,7 @@ def _speaker_summary(events: list[kotoba.StreamEvent]) -> dict[str, Any]:
     }
 
 
-async def warm_up(url: str, deadline_s: float) -> str:
+async def warm_up(url: str, deadline_s: float, language: str) -> str:
     """Open plain sessions until one is acknowledged; return a short note."""
 
     client = kotoba.AsyncKotobaClient(asr_ws_url=url)
@@ -149,19 +158,22 @@ async def warm_up(url: str, deadline_s: float) -> str:
     while True:
         attempts += 1
         try:
-            async with client.asr.stream(url=url):
+            async with client.asr.stream(language=language, url=url):
                 return f"ready after {time.monotonic() - start:.1f} s, {attempts} attempt(s)"
         except (kotoba.APIError, OSError) as exc:
+            # A rejected session option (a --language the deployment does not serve) never becomes ready.
+            if isinstance(exc, kotoba.ProtocolError) and exc.code == "invalid_parameters":
+                raise
             if time.monotonic() - start > deadline_s:
                 raise RuntimeError(f"not ready after {deadline_s:.0f} s: {exc}") from exc
             await asyncio.sleep(5)
 
 
-async def check_stream(url: str, pcm: bytes) -> Result:
+async def check_stream(url: str, pcm: bytes, language: str) -> Result:
     client = kotoba.AsyncKotobaClient(asr_ws_url=url)
     events: list[kotoba.StreamEvent] = []
     ack = None
-    async with client.asr.stream(diarization=True, timestamps=True, url=url) as session:
+    async with client.asr.stream(language=language, diarization=True, timestamps=True, url=url) as session:
         feeder = asyncio.create_task(session.feed(paced(pcm)))
         async for event in session:
             if event.type == "session_ready":
@@ -179,13 +191,15 @@ async def check_stream(url: str, pcm: bytes) -> Result:
     return Result("", not problems, detail, extra=summary)
 
 
-async def check_keywords(url: str, pcm: bytes, keywords: list[str]) -> Result:
+async def check_keywords(url: str, pcm: bytes, language: str, keywords: list[str]) -> Result:
     if not keywords:
         return Result("", False, "no --keywords given")
     client = kotoba.AsyncKotobaClient(asr_ws_url=url)
     events = [
         event
-        async for event in client.asr.transcribe_stream(paced(pcm), diarization=True, keywords=keywords, url=url)
+        async for event in client.asr.transcribe_stream(
+            paced(pcm), language=language, diarization=True, keywords=keywords, url=url
+        )
     ]
     problems = []
     if not all(isinstance(e, kotoba.StreamEvent) for e in events):
@@ -206,12 +220,12 @@ async def check_keywords(url: str, pcm: bytes, keywords: list[str]) -> Result:
     return Result("", not problems, detail, extra=summary)
 
 
-def check_default(url: str, pcm: bytes) -> Result:
+def check_default(url: str, pcm: bytes, language: str) -> Result:
     """The default path, through the sync client."""
 
     client = kotoba.KotobaClient(asr_ws_url=url)
     sent_before = len(SENT_UPDATES)
-    deltas = list(client.asr.transcribe_stream(paced_sync(pcm), url=url))
+    deltas = list(client.asr.transcribe_stream(paced_sync(pcm), language=language, url=url))
     problems = []
     if not deltas:
         problems.append("no delta")
@@ -231,10 +245,10 @@ def check_default(url: str, pcm: bytes) -> Result:
     return Result("", not problems, detail, extra={"text": "".join(deltas)})
 
 
-async def check_no_diarization(url: str, pcm: bytes) -> Result:
+async def check_no_diarization(url: str, pcm: bytes, language: str) -> Result:
     client = kotoba.AsyncKotobaClient(asr_ws_url=url)
     try:
-        async with client.asr.stream(diarization=True, url=url) as session:
+        async with client.asr.stream(language=language, diarization=True, url=url) as session:
             await session.send_audio(pcm[: CHUNK_BYTES * 10])
             await session.commit()
             async for event in session:
@@ -247,14 +261,14 @@ async def check_no_diarization(url: str, pcm: bytes) -> Result:
     return Result("", False, "session ran without an error")
 
 
-async def check_long(url: str, pcm: bytes) -> Result:
+async def check_long(url: str, pcm: bytes, language: str) -> Result:
     client = kotoba.AsyncKotobaClient(asr_ws_url=url)
     start = time.monotonic()
     arrivals: list[float] = []
     events: list[kotoba.StreamEvent] = []
     # transcribe_stream() returns only after the server's `committed`; a
     # handshake or idle timeout raises instead.
-    async for event in client.asr.transcribe_stream(paced(pcm), diarization=True, url=url):
+    async for event in client.asr.transcribe_stream(paced(pcm), language=language, diarization=True, url=url):
         events.append(event)
         if event.text and event.text.strip():
             arrivals.append(time.monotonic() - start)
@@ -271,6 +285,18 @@ async def check_long(url: str, pcm: bytes) -> Result:
         f"longest text gap {max(gaps):.1f} s, {len(events)} events"
     )
     return Result("", not problems, detail)
+
+
+async def check_unsupported_language(url: str, language: str) -> Result:
+    client = kotoba.AsyncKotobaClient(asr_ws_url=url)
+    try:
+        # The server refuses the session update, so entering the session raises.
+        async with client.asr.stream(language=language, url=url):
+            pass
+    except kotoba.ProtocolError as exc:
+        ok = exc.code == "invalid_parameters" and exc.param == "session.input_audio_transcription.target_language"
+        return Result("", ok, f"ProtocolError code={exc.code} param={exc.param} for language={language!r}")
+    return Result("", False, f"the deployment acknowledged a session with language={language!r}")
 
 
 async def run_check(name: str, check, *args) -> Result:
@@ -295,21 +321,32 @@ async def main(args: argparse.Namespace) -> int:
         sys.exit("set KOTOBA_ASR_URL or pass --url")
     clip = load_pcm16(args.audio, args.clip_seconds)
     long = load_pcm16(args.long_audio or args.audio, args.long_seconds)
-    print(f"kotoba-sdk {kotoba.__version__} from {Path(kotoba.__file__).parent}")
+    language = args.language
+    print(f"kotoba-sdk {kotoba.__version__} from {Path(kotoba.__file__).parent}; language {language}")
 
     for target in [url] + ([no_diar_url] if no_diar_url else []):
-        print(f"warm-up {target}: {await warm_up(target, args.warmup_seconds)}", flush=True)
+        print(f"warm-up {target}: {await warm_up(target, args.warmup_seconds, language)}", flush=True)
     results = [
-        await run_check("a. stream(diarization, timestamps)", check_stream, url, clip),
-        await run_check("b. transcribe_stream(diarization, keywords)", check_keywords, url, clip, args.keywords),
-        await run_check("c. transcribe_stream() defaults", check_default, url, clip),
+        await run_check("a. stream(diarization, timestamps)", check_stream, url, clip, language),
+        await run_check(
+            "b. transcribe_stream(diarization, keywords)", check_keywords, url, clip, language, args.keywords
+        ),
+        await run_check("c. transcribe_stream() defaults", check_default, url, clip, language),
     ]
     name = "d. diarization on a deployment without it"
     if no_diar_url:
-        results.append(await run_check(name, check_no_diarization, no_diar_url, clip))
+        results.append(await run_check(name, check_no_diarization, no_diar_url, clip, language))
     else:
         results.append(Result(name, False, "skipped: no KOTOBA_ASR_URL_NO_DIARIZATION"))
-    results.append(await run_check(f"e. {args.long_seconds:.0f} s diarized session", check_long, url, long))
+    results.append(await run_check(f"e. {args.long_seconds:.0f} s diarized session", check_long, url, long, language))
+    results.append(
+        await run_check(
+            f"f. unsupported language {args.unsupported_language!r}",
+            check_unsupported_language,
+            url,
+            args.unsupported_language,
+        )
+    )
 
     print("\n| Check | Result | Time | Detail |\n|---|---|---|---|")
     for r in results:
@@ -324,6 +361,15 @@ if __name__ == "__main__":
     parser.add_argument("--url", help="diarizing deployment (default: KOTOBA_ASR_URL)")
     parser.add_argument(
         "--no-diarization-url", help="deployment without diarization (default: KOTOBA_ASR_URL_NO_DIARIZATION)"
+    )
+    parser.add_argument(
+        "--language",
+        default="ja",
+        help="language code checks a-e pass to the SDK; both deployments must serve it, and --audio / "
+        "--long-audio / --keywords must be in that language (default: ja, the language of the default clip)",
+    )
+    parser.add_argument(
+        "--unsupported-language", default="xx", help="code the deployment does not serve, for check f (default: xx)"
     )
     parser.add_argument("--audio", type=Path, default=DEFAULT_AUDIO, help="clip for checks a-d")
     parser.add_argument("--clip-seconds", type=float, default=30.0, help="clip length, looped if shorter")

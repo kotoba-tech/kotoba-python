@@ -99,6 +99,44 @@ def test_submit_job_omits_kana_by_default(fake_wav):
     body = responses.calls[0].request.body
     # No style field is sent when kana is not requested (server defaults to "default").
     assert b"human_name" not in body
+    assert b"verbatim" not in body
+
+
+@responses.activate
+@pytest.mark.parametrize(("verbatim", "sent"), [(False, b"false"), (True, b"true")])
+def test_submit_job_sends_verbatim(fake_wav, verbatim, sent):
+    responses.add(responses.POST, JOBS_URL, json={"job_id": "clean-1"}, status=202)
+    _client().asr.submit_job(
+        fake_wav, language="ja", style_preference={"human_name": "kana", "verbatim": verbatim}
+    )
+    body = responses.calls[0].request.body
+    # The form field the job route parses as a boolean: lowercase, not Python's "False".
+    assert b'name="verbatim"\r\n\r\n' + sent + b"\r\n" in body
+    assert b'name="human_name"\r\n\r\nkana\r\n' in body
+
+
+async def test_async_submit_job_sends_verbatim(fake_wav):
+    seen: list[bytes] = []
+
+    def app(request: httpx.Request) -> httpx.Response:
+        seen.append(request.content)
+        return httpx.Response(202, json={"job_id": "clean-2"})
+
+    session = _async_session_with(app, max_retries=0)
+    job = await kotoba.AsyncASRClient(session, api_key="token-abc").submit_job(
+        fake_wav, language="ja", style_preference={"verbatim": False}
+    )
+    await session.aclose()
+    assert job.job_id == "clean-2"
+    assert b'name="verbatim"\r\n\r\nfalse\r\n' in seen[0]
+
+
+@responses.activate
+def test_transcribe_one_shot_refuses_verbatim_false(fake_wav):
+    responses.add(responses.POST, STT_URL, json={}, status=200)
+    with pytest.raises(ValueError, match="verbatim"):
+        _client().asr.transcribe(fake_wav, language="ja", style_preference={"verbatim": False})
+    assert len(responses.calls) == 0  # refused before any request
 
 
 @responses.activate
@@ -406,13 +444,13 @@ def test_transcribe_one_shot_invalid_parameters_is_a_protocol_error(fake_wav):
         responses.POST,
         STT_URL,
         json={"error": {"type": "invalid_request_error", "code": "invalid_parameters",
-                        "message": "無効なパラメータです", "param": None}},
+                        "message": "Invalid parameters", "param": None}},
         status=400,
     )
     with pytest.raises(ProtocolError) as exc:
         _client().asr.transcribe(fake_wav)
     assert exc.value.status_code == 400
-    assert str(exc.value) == "無効なパラメータです"
+    assert str(exc.value) == "Invalid parameters"
 
 
 @responses.activate

@@ -42,7 +42,9 @@ class SpeechToTextRequest:
     ) -> SpeechToTextRequest:
         # ``language`` is omitted when None so the server applies its configured
         # default; ``keywords`` goes out as repeated fields; the SDK-wide
-        # ``style_preference`` maps onto this endpoint's ``kana`` flag.
+        # ``style_preference`` maps onto this endpoint's ``kana`` flag. The
+        # endpoint has no ``verbatim`` field and ignores an unknown one, so
+        # ``verbatim=False`` is refused here instead of returning the fillers.
         form: dict[str, Any] = {
             "file_format": file_format,
             "with_timestamps": str(with_timestamps).lower(),
@@ -57,6 +59,11 @@ class SpeechToTextRequest:
         if terms:
             form["keywords"] = terms
         preference = TranscriptionStylePreference.coerce(style_preference)
+        if preference is not None and preference.verbatim is False:
+            raise ValueError(
+                "style_preference verbatim=False is not supported by POST /v1/speech-to-text; "
+                "use stream() / transcribe_stream(), or transcribe(batch=True) where the job API is served"
+            )
         if preference is not None and preference.human_name == "kana":
             form["kana"] = "true"
         # Auth is the session's ``Authorization`` header (``Bearer``, or ``Key``

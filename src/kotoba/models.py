@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Literal, Mapping, TypedDict
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
 
 # Accepts every wire name the TTS server echoes back in ``session.created``
 # (see kotoba_sdk_gpu ``_OUTPUT_FORMAT_ALIASES``): a narrower Literal would make
@@ -69,17 +69,21 @@ class TranscriptionStylePreference(BaseModel):
 
     Mirrors the server's
     ``session.input_audio_transcription.style_preference`` shape.
-    ``human_name="kana"`` transcribes personal names in katakana; ``None``
-    (the default) lets the server decide.
+    ``human_name="kana"`` transcribes personal names in katakana.
+    ``verbatim=False`` removes fillers and restarts from the transcript
+    (Japanese only); ``verbatim=True`` keeps them. ``None`` (the default of
+    both) omits the field, so the deployment's default applies.
     """
 
     human_name: Literal["kana"] | None = None
+    verbatim: StrictBool | None = None
 
-    def to_wire(self) -> dict[str, str]:
-        """Flat field map shared by the WS and REST transports.
+    def to_wire(self) -> dict[str, Any]:
+        """Field map of the set preferences, as the WS session update carries it.
 
-        Returns ``{}`` when no preference is set, so callers can merge it
-        unconditionally.
+        The transcription-job form sends the same fields, with a boolean as
+        ``"true"`` / ``"false"``. Returns ``{}`` when no preference is set, so
+        callers can merge it unconditionally.
         """
 
         return self.model_dump(exclude_none=True)

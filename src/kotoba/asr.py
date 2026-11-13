@@ -64,15 +64,17 @@ def _job_data(
 ) -> dict[str, str]:
     """Build the transcription-job multipart form fields.
 
-    ``style_preference`` is flattened into individual form fields (multipart
-    can't carry nested objects); an unset preference contributes nothing, so
-    the server applies its own default.
+    ``style_preference`` is flattened into individual form fields
+    (``human_name``, ``verbatim``; multipart can't carry nested objects); an
+    unset preference contributes nothing, so the server applies its own default.
     """
 
     style_preference = TranscriptionStylePreference.coerce(style_preference)
     data = {"language": language, "with_timestamps": str(with_timestamps).lower()}
     if style_preference is not None:
-        data.update(style_preference.to_wire())
+        for name, value in style_preference.to_wire().items():
+            # Form values are text: ``verbatim`` goes out as "true" / "false".
+            data[name] = str(value).lower() if isinstance(value, bool) else value
     return data
 
 
@@ -232,7 +234,9 @@ class ASRClient:
         deployment: the server biases decoding toward their spelling (blank terms are
         dropped; the deployment's count and length limits are checked by the server).
         ``style_preference`` (kana) and
-        ``with_timestamps`` must be enabled on the deployment.
+        ``with_timestamps`` must be enabled on the deployment. This endpoint has
+        no ``verbatim`` field: ``style_preference`` with ``verbatim=False``
+        raises ``ValueError`` before any request is sent.
         ``file_format="pcm_s16le_16"`` uploads raw 16-bit LE PCM at 16 kHz mono;
         ``"other"`` (default) is any encoded audio. ``diarization=True`` asks the
         deployment to attribute words to speakers: ``TranscriptResult.utterances``
@@ -245,7 +249,9 @@ class ASRClient:
         Self-hosted ``streaming_stt`` deployments only; not available on fal.
         ``language=None`` means ``"ja"``; ``timeout`` is the polling deadline
         (default 20 min) and ``poll_interval`` / ``poll_backoff`` /
-        ``max_poll_interval`` shape the polling.
+        ``max_poll_interval`` shape the polling. ``style_preference`` goes out as
+        the job's ``human_name`` / ``verbatim`` form fields (``verbatim=False``:
+        fillers and restarts removed, Japanese only).
 
         An argument that belongs to the other mode raises ``ValueError`` before
         any request is sent. Both modes post relative to the session base URL
@@ -372,6 +378,14 @@ class ASRClient:
         url: str | None = None,
     ) -> ASRSession:
         """Open a streaming ASR session. Caller drives send_audio / commit.
+
+        ``style_preference`` is sent once in the session update, on deployments
+        that enable it: ``{"human_name": "kana"}`` writes personal names in
+        katakana, and ``{"verbatim": False}`` removes fillers and restarts
+        (``True`` keeps them; unset leaves the deployment's default).
+        ``verbatim=False`` is Japanese only: with another ``language`` the
+        server answers ``ProtocolError`` (``code="invalid_parameters"``,
+        ``param="session.input_audio_transcription"``).
 
         ``diarization=True`` sends ``session.diarization: true`` (deployments with
         a diarization service only): ``partial_transcript`` events carry a
@@ -664,7 +678,9 @@ class AsyncASRClient:
         deployment: the server biases decoding toward their spelling (blank terms are
         dropped; the deployment's count and length limits are checked by the server).
         ``style_preference`` (kana) and
-        ``with_timestamps`` must be enabled on the deployment.
+        ``with_timestamps`` must be enabled on the deployment. This endpoint has
+        no ``verbatim`` field: ``style_preference`` with ``verbatim=False``
+        raises ``ValueError`` before any request is sent.
         ``file_format="pcm_s16le_16"`` uploads raw 16-bit LE PCM at 16 kHz mono;
         ``"other"`` (default) is any encoded audio. ``diarization=True`` asks the
         deployment to attribute words to speakers: ``TranscriptResult.utterances``
@@ -677,7 +693,9 @@ class AsyncASRClient:
         Self-hosted ``streaming_stt`` deployments only; not available on fal.
         ``language=None`` means ``"ja"``; ``timeout`` is the polling deadline
         (default 20 min) and ``poll_interval`` / ``poll_backoff`` /
-        ``max_poll_interval`` shape the polling.
+        ``max_poll_interval`` shape the polling. ``style_preference`` goes out as
+        the job's ``human_name`` / ``verbatim`` form fields (``verbatim=False``:
+        fillers and restarts removed, Japanese only).
 
         An argument that belongs to the other mode raises ``ValueError`` before
         any request is sent. Both modes post relative to the session base URL

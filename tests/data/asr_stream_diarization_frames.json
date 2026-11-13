@@ -2042,7 +2042,7 @@
     "error": {
      "type": "invalid_request_error",
      "code": "invalid_parameters",
-     "message": "無効なパラメータです",
+     "message": "Invalid parameters",
      "param": "session.diarization"
     },
     "event_id": "d6c35764-4e63-4e27-b998-afa48f609816-er-1793591934053563",

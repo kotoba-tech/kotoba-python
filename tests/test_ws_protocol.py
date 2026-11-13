@@ -30,7 +30,15 @@ from kotoba.tts import AsyncTTSClient, TTSClient, _content_type_for
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("style_preference", "expected"),
-    [(None, None), ({"human_name": "kana"}, {"human_name": "kana"})],
+    [
+        (None, None),
+        ({}, None),
+        ({"human_name": "kana"}, {"human_name": "kana"}),
+        # verbatim travels as a JSON boolean, and only when the caller set it.
+        ({"verbatim": False}, {"verbatim": False}),
+        ({"verbatim": True}, {"verbatim": True}),
+        ({"human_name": "kana", "verbatim": False}, {"human_name": "kana", "verbatim": False}),
+    ],
 )
 async def test_asr_handshake_style_preference(style_preference, expected):
     session = AsyncASRSession(

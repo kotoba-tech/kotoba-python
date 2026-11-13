@@ -91,6 +91,28 @@ def test_style_preference_coerce_rejects_invalid_dict():
         TranscriptionStylePreference.coerce({"human_name": "unknown"})
 
 
+@pytest.mark.parametrize(
+    ("value", "wire"),
+    [
+        ({}, {}),
+        ({"verbatim": False}, {"verbatim": False}),
+        ({"verbatim": True}, {"verbatim": True}),
+        ({"verbatim": None}, {}),
+        ({"human_name": "kana", "verbatim": False}, {"human_name": "kana", "verbatim": False}),
+    ],
+)
+def test_style_preference_verbatim_is_sent_only_when_set(value, wire):
+    # An unset verbatim is omitted, so the deployment's default applies.
+    assert TranscriptionStylePreference.coerce(value).to_wire() == wire
+
+
+@pytest.mark.parametrize("verbatim", ["false", 0, "no"])
+def test_style_preference_verbatim_must_be_a_boolean(verbatim):
+    # The server field is a strict boolean; a string would be refused there.
+    with pytest.raises(ValidationError):
+        TranscriptionStylePreference.coerce({"verbatim": verbatim})
+
+
 def test_normalize_keywords_strips_and_drops_blanks_and_leaves_limits_to_the_server():
     from kotoba.models import normalize_keywords
 

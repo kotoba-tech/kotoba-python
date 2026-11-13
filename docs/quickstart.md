@@ -121,10 +121,10 @@ for delta in client.asr.transcribe_stream(
 
 Optional knobs on both `stream(...)` and `transcribe_stream(...)`:
 
-- `language`: `"ja"` or `"en"`.
+- `language`: the code of the language spoken in the audio (default `"ja"`). The deployment sets the codes it serves; fal `kotoba-streaming-stt` serves `ja`, `en`, `zh` (Mandarin, Simplified output), `zh-tw` (Mandarin, Taiwan Traditional output), `ko`, `yue` (Cantonese), `es` and `vi`.
 - `sample_rate`: defaults to 24 kHz; the session resamples internally if your capture rate differs.
 - `keywords`: terms whose spelling the transcript should prefer (names, product words); the deployment sets the limits (1,000 terms of 64 characters on fal today).
-- `style_preference`: `{"human_name": "kana"}` to transcribe personal and place names in katakana.
+- `style_preference`: `{"human_name": "kana"}` to transcribe personal and place names in katakana; `{"verbatim": False}` to remove fillers and restarts (Japanese only; unset keeps the deployment's default).
 
 For `turn_detection` configuration, defaults, and completed-turn events, see the
 [SDK contract](../../../../.agent/sdd/kotoba-api-spec.md#python-sdk-streaming-asr).
